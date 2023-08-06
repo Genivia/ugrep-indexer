@@ -1,0 +1,104 @@
+.TH UGREP-INDEXER "1" "August 06, 2023" "ugrep-indexer 0.9" "User Commands"
+.SH NAME
+\fBugrep-indexer\fR -- file indexer for accelerated ugrep search
+.SH SYNOPSIS
+.B ugrep-indexer [\fB-0\fR|...|\fB-9\fR] [\fB-.\fR] [\fB-c\fR|\fB-d\fR|\fB-f\fR] [\fB-I\fR] [\fB-q\fR] [\fB-S\fR] [\fB-s\fR] [\fB-X\fR] [\fB-z\fR]
+.SH DESCRIPTION
+The \fBugrep-indexer\fR utility recursively indexes files to accelerate ugrep
+recursive searches with \fBugrep\fR option \fB--index\fR.
+.PP
+The following options are available:
+.TP
+\fB\-0\fR, \fB\-1\fR, \fB\-2\fR, \fB\-3\fR, ..., \fB\-9\fR, \fB\-\-accuracy\fR=\fIDIGIT\fR
+Specifies indexing accuracy.  A low accuracy reduces the indexing
+storage overhead at the cost of a higher rate of false positive
+pattern matches (more noise).  A high accuracy reduces the rate of
+false positive regex pattern matches (less noise) at the cost of an
+increased indexing storage overhead.  An accuracy between 3 and 7
+is recommended.  The default accuracy is 5.
+.TP
+\fB\-.\fR, \fB\-\-hidden\fR
+Index hidden files and directories.
+.TP
+\fB\-?\fR, \fB\-\-help\fR
+Display a help message and exit.
+.TP
+\fB\-c\fR, \fB\-\-check\fR
+Recursively check and report indexes without reindexing files.
+.TP
+\fB\-d\fR, \fB\-\-delete\fR
+Recursively remove index files.
+.TP
+\fB\-f\fR, \fB\-\-force\fR
+Force reindexing of files, even those that are already indexed.
+.TP
+\fB\-I\fR, \fB\-\-ignore\-binary\fR
+Do not index binary files.
+.TP
+\fB\-q\fR, \fB\-\-quiet\fR, \fB\-\-silent\fR
+Quiet mode: do not display indexing statistics.
+.TP
+\fB\-S\fR, \fB\-\-dereference\-files\fR
+Follow symbolic links to files.  Symbolic links to directories are
+never followed.
+.TP
+\fB\-s\fR, \fB\-\-no\-messages\fR
+Silent mode: nonexistent and unreadable files are ignored, i.e.
+their error messages and warnings are suppressed.
+.TP
+\fB\-V\fR, \fB\-\-version\fR
+Display version and exit.
+.TP
+\fB\-v\fR, \fB\-\-verbose\fR
+Produce verbose output.
+.TP
+\fB\-X\fR, \fB\-\-ignore\-files\fR[=\fIFILE\fR]
+Do not index files and directories matching the globs in a FILE
+encountered during indexing.  The default FILE is `.gitignore'.
+.TP
+\fB\-z\fR, \fB\-\-decompress\fR
+Index the contents of compressed files and archives.
+This option is not yet available in this version.
+ugrep\-indexer 0.9 beta
+License BSD\-3\-Clause: <https://opensource.org/licenses/BSD\-3\-Clause>
+Written by Robert van Engelen and others: <https://github.com/Genivia/ugrep>
+.SH "EXIT STATUS"
+The \fBugrep-indexer\fR utility exits with one of the following values:
+.IP 0
+Indexes are up to date.
+.IP 1
+Indexing check with option \fB-c\fR detected missing and outdated index files.
+.SH EXAMPLES
+Recursively and incrementally index all non-binary files showing progress
+.IP
+$ ugrep-indexer -I -v
+.PP
+Index all non-binary files, show progress, follow symbolic links to files (but
+not to directories), and do not index files and directories matching the globs
+in .gitignore:
+.IP
+$ ugrep-indexer -I -v -S -X
+.PP
+Recursively force re-indexing of all non-binary files:
+.IP
+$ ugrep-indexer -f -I
+.PP
+Recursively delete all hidden ._UG#_Store index files to restore the directory
+tree to non-indexed:
+.IP
+$ ugrep-indexer -d
+.PP
+Increase search performance by increasing the indexing accuracy from 5
+(default) to 7 at a cost of larger index files:
+.IP
+$ ugrep-indexer -If7
+.SH BUGS
+Report bugs at:
+.IP
+https://github.com/Genivia/ugrep-indexer/issues
+.PP
+.SH LICENSE
+\fBugrep\fR and \fBugrep-indexer\fR are released under the BSD\-3 license.  All
+parts of the software have reasonable copyright terms permitting free
+redistribution.  This includes the ability to reuse all or parts of the ugrep
+and ugrep-indexer source tree.
