@@ -13,10 +13,40 @@ cases when searching a few files with patterns that match a lot (see notes
 below).  Index-based search is significantly faster on slow file systems or
 when file system caching is ineffective.
 
-A typical example of indexing and index-based search:
+A typical example of an index-based search on a USB drive:
 
+    $ cd drive/ugrep
+    $ ugrep-indexer -I
 
+    12245871 bytes scanned and indexed with 19% noise on average
+         1317 files indexed in 28 directories
+            0 new directories indexed
+         1317 new files indexed
+            0 modified files indexed
+            0 deleted files removed from indexes
+          128 binary files skipped with --ignore-binary
+            0 symbolic links skipped
+            0 devices skipped
+      5588843 bytes indexing storage increase at 4243 bytes/file
 
+Searching takes 1.07 seconds without indexing after unmounting the USB `drive`
+and mounting again to clear FS cache for a fair comparison:
+
+    $ cd drive/ugrep
+    $ ugrep -I -l 'std::chrono' --stats
+    src/ugrep.cpp
+
+    Searched 1317 files in 28 directories in 1.07 seconds with 8 threads: 1 matching (0.07593%)
+
+Searching takes 0.109 seconds with indexing, which is 10 times faster, after
+unmounting `drive` and mounting again to clear FS cache for a fair comparison:
+
+    $ cd drive/ugrep
+    $ ugrep --index -I -l 'std::chrono' --stats
+    src/ugrep.cpp
+
+    Searched 1317 files in 28 directories in 0.109 seconds with 8 threads: 1 matching (0.07593%)
+    Skipped 1316 of 1317 files with indexes not matching any search patterns
 
 Index-based search is most effective when searching a lot of files and when
 our regex patterns aren't matching too much, i.e. we want to limit the use of
