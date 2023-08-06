@@ -38,8 +38,9 @@ mounting again to clear FS cache for a fair comparison:
 
     Searched 1317 files in 28 directories in 1.07 seconds with 8 threads: 1 matching (0.07593%)
 
-Searching takes 0.109 seconds with indexing, which is 10 times faster, after
-unmounting `drive` and mounting again to clear FS cache for a fair comparison:
+Searching takes only 0.109 seconds with indexing, which is 10 times faster,
+after unmounting `drive` and mounting again to clear FS cache for a fair
+comparison:
 
     $ cd drive/ugrep
     $ ugrep --index -I -l 'std::chrono' --stats
@@ -52,6 +53,44 @@ Index-based search is most effective when searching a lot of files and when our
 regex patterns aren't matching too much, i.e. we want to limit the use of
 unlimited repeats `*` and `+` and limit the use of Unicode character classes
 when possible.  This reduces the ugrep start-up time (see Q&A below).
+
+Regex patterns are converted internally by ugrep to hash tables for up to the
+first 16 bytes of the regex patterns specified, possibly shorter in order to
+reduce construction time.  Therefore, first characters of a regex pattern to
+search are most critical to limit so-called false positive matches that will
+slow down searching.
+
+Quick examples
+--------------
+
+Recursively and incrementally index all non-binary files showing progress:
+
+    $ ugrep-indexer -I -v
+
+Index all non-binary files, show progress, follow symbolic links to files (but
+not to directories), and do not index files and directories matching the globs
+in .gitignore:
+
+    $ ugrep-indexer -I -v -S -X
+
+Recursively force re-indexing of all non-binary files:
+
+    $ ugrep-indexer -f -I
+
+Recursively delete all hidden `._UG#_Store` index files to restore the
+directory tree to non-indexed:
+
+    $ ugrep-indexer -d
+
+Increase search performance by increasing the indexing accuracy from 5
+(default) to 7 at a cost of larger index files:
+
+    $ ugrep-indexer -If7
+
+Q&A
+---
+
+### Q: How does it work?
 
 Indexing adds a hidden index file `._UG#_Store` to each directory indexed.
 Files indexed are scanned (never changed!) by ugrep-indexer to generate index
@@ -101,42 +140,6 @@ Indexed-based search works with all ugrep options except with option `-v`
 (`--invert-match`), `--filter`, `-P` (`--perl-regexp`) and `-Z` (`--fuzzy`).
 Option `-c` (`--count`) with `--index` automatically enables `--min-count=1` to
 skip all files with zero matches.
-
-Regex patterns are converted internally by ugrep to hash tables for up to the
-first 16 bytes of the regex patterns specified, possibly shorter in order to
-reduce construction time.  Therefore, first characters of a regex pattern to
-search are most critical to limit so-called false positive matches that will
-slow down searching.
-
-Examples
---------
-
-Recursively and incrementally index all non-binary files showing progress:
-
-    $ ugrep-indexer -I -v
-
-Index all non-binary files, show progress, follow symbolic links to files (but
-not to directories), and do not index files and directories matching the globs
-in .gitignore:
-
-    $ ugrep-indexer -I -v -S -X
-
-Recursively force re-indexing of all non-binary files:
-
-    $ ugrep-indexer -f -I
-
-Recursively delete all hidden `._UG#_Store` index files to restore the
-directory tree to non-indexed:
-
-    $ ugrep-indexer -d
-
-Increase search performance by increasing the indexing accuracy from 5
-(default) to 7 at a cost of larger index files:
-
-    $ ugrep-indexer -If7
-
-Q&A
----
 
 ### Q: What is indexing accuracy?
 
