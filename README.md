@@ -54,12 +54,6 @@ regex patterns aren't matching too much, i.e. we want to limit the use of
 unlimited repeats `*` and `+` and limit the use of Unicode character classes
 when possible.  This reduces the ugrep start-up time (see Q&A below).
 
-Regex patterns are converted internally by ugrep to hash tables for up to the
-first 16 bytes of the regex patterns specified, possibly shorter in order to
-reduce construction time.  Therefore, first characters of a regex pattern to
-search are most critical to limit so-called false positive matches that will
-slow down searching.
-
 Quick examples
 --------------
 
@@ -140,6 +134,12 @@ Indexed-based search works with all ugrep options except with option `-v`
 (`--invert-match`), `--filter`, `-P` (`--perl-regexp`) and `-Z` (`--fuzzy`).
 Option `-c` (`--count`) with `--index` automatically enables `--min-count=1` to
 skip all files with zero matches.
+
+Regex patterns are converted internally by ugrep with option `--index` to hash
+tables for up to the first 16 bytes of the regex patterns specified, possibly
+shorter in order to reduce construction time.  Therefore, first characters of a
+regex pattern to search are most critical to limit so-called false positive
+matches that will slow down searching.
 
 ### Q: What is indexing accuracy?
 
