@@ -13,7 +13,7 @@ cases when searching a few files with patterns that match a lot (see Q&A
 below).  Index-based search is significantly faster on slow file systems or
 when file system caching is ineffective.
 
-A typical example of an index-based search on a USB drive:
+A typical example of an index-based search:
 
     $ cd drive/ugrep
     $ ugrep-indexer -I
@@ -29,8 +29,8 @@ A typical example of an index-based search on a USB drive:
             0 devices skipped
       5588843 bytes indexing storage increase at 4243 bytes/file
 
-Searching takes 1.07 seconds without indexing after unmounting the USB `drive`
-and mounting again to clear FS cache for a fair comparison:
+Searching takes 1.07 seconds without indexing after unmounting the `drive` and
+mounting again to clear FS cache for a fair comparison:
 
     $ cd drive/ugrep
     $ ugrep -I -l 'std::chrono' --stats
