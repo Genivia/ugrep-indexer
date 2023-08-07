@@ -1,11 +1,11 @@
 A file indexer to accelerate file searching
 ===========================================
 
-The *ugrep-indexer* utility recursively indexes files to accelerate ugrep
-recursive searches with option `--index`.
+The *ugrep-indexer* utility recursively indexes files to accelerate recursive
+searching on file systems with ugrep.
 
-[ugrep](https://github.com/Genivia/ugrep) is an ultra-fast file searcher that
-supports index-based searching as of v3.12.5.
+[ugrep](https://github.com/Genivia/ugrep) is a grep-compatible ultra fast file
+searcher that supports index-based searching as of v3.12.5.
 
 Indexing-based search makes sense if you're doing a recursive search on a lot
 of files.  Index-based searching is typically faster, except for pathelogical
