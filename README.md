@@ -1,5 +1,5 @@
-A file indexer to accelerate file searching
-===========================================
+A file indexer to accelerate grepping
+=====================================
 
 The *ugrep-indexer* utility recursively indexes files to accelerate recursive
 searching on file systems with ugrep.
