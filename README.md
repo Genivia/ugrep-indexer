@@ -59,27 +59,38 @@ Quick examples
 
 Recursively and incrementally index all non-binary files showing progress:
 
-    $ ugrep-indexer -I -v
+    ugrep-indexer -I -v
 
 Index all non-binary files, show progress, follow symbolic links to files (but
 not to directories), and do not index files and directories matching the globs
 in .gitignore:
 
-    $ ugrep-indexer -I -v -S -X
+    ugrep-indexer -I -v -S -X
 
 Recursively force re-indexing of all non-binary files:
 
-    $ ugrep-indexer -f -I
+    ugrep-indexer -f -I
 
 Recursively delete all hidden `._UG#_Store` index files to restore the
 directory tree to non-indexed:
 
-    $ ugrep-indexer -d
+    ugrep-indexer -d
 
 Increase search performance by increasing the indexing accuracy from 5
 (default) to 7 at a cost of larger index files:
 
-    $ ugrep-indexer -If7
+    ugrep-indexer -If7
+
+Build steps
+-----------
+
+Configure and compile with:
+
+    ./build.sh
+
+If desired but not required, install with:
+
+    sudo make install
 
 Q&A
 ---
