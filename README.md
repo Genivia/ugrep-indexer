@@ -2,7 +2,7 @@ A file indexer to accelerate grepping
 =====================================
 
 The *ugrep-indexer* utility recursively indexes files to accelerate recursive
-searching on file systems with ugrep.
+grepping.
 
 [ugrep](https://github.com/Genivia/ugrep) is a grep-compatible ultra fast file
 searcher that supports index-based searching as of v3.12.5.
