@@ -176,8 +176,8 @@ overhead by specifying a lower indexing accuracy.  However, indexing at a lower
 accuracy might increase the false positive rate of indexing, which can lower
 search performance.
 
-Indexing the example from above with level 0 (option `-0`) reduced the indexing
-storage overhead 8.6 times, from 4243 bytes per file to 490 bytes per file:
+Indexing the example from above with level 0 (option `-0`) reduces the indexing
+storage overhead 8.6 times, from 4243 bytes per file to only 490 bytes per file:
 
     12245871 bytes scanned and indexed with 42% noise on average
         1317 files indexed in 28 directories
@@ -195,6 +195,10 @@ example instead of 10x, with 16 files actually searched instead of just one:
 
     Searched 1317 files in 28 directories in 0.139 seconds with 8 threads: 1 matching (0.07593%)
     Skipped 1301 of 1317 files with indexes not matching any search patterns
+
+However, regex patterns that are more complex than this example may have a
+higher false positive rate, which might reduce indexed search speeds with this
+low indexing accuracy.
 
 Indexing is a form of lossy compression.  The higher the indexing accuracy, the
 faster ugrep search performance should be by skipping more files that do not
