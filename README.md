@@ -103,6 +103,12 @@ If desired but not required, install with:
 
     sudo make install
 
+Future enhancements
+-------------------
+
+- Index the contents of compressed files and archives to search them faster.
+- The option to create one index file, e.g. specified explicitly to ugrep.
+
 Q&A
 ---
 
