@@ -214,7 +214,9 @@ match.  A higher accuracy reduces noise (less lossy).  A high level of noise
 causes ugrep to sometimes search indexed files that do not match.  We call
 these "false positive matches".  Higher accuracy requires larger index files.
 Normally we expect 4K or less indexing storage per file on average.  The
-maximum is 64KB of index storage per file.
+minium is 128 bytes of index storage per file, excluding the file name and
+4-byte index header.  The maximum is 64K bytes storage per file for very large
+noisy files.
 
 When searching indexed files, ugrep option `--stats` shows the search
 statistics after the indexing-based search completed.  When many files are not
