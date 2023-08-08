@@ -15,9 +15,9 @@ below).
 Index-based search is significantly faster on slow file systems or when file
 system caching is ineffective.  If the file system on a drive searched is not
 cached in RAM, then indexing will speed up search.  So it helps to search
-files that aren't frequentl accessed.  On the other hand, if files are already
+files that aren't recently accessed.  On the other hand, if files are already
 cached in RAM because files were read before, then indexing will not necesarily
-speed up search.
+speed up search obviously.
 
 A typical example of an index-based search:
 
