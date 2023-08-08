@@ -7,14 +7,14 @@ searching on file systems with ugrep.
 [ugrep](https://github.com/Genivia/ugrep) is a grep-compatible ultra fast file
 searcher that supports index-based searching as of v3.12.5.
 
-Index-based search is significantly faster on slow file systems and when file
-system caching is ineffective: if the file system on a drive searched is not
-cached in RAM, then indexing will speed up search.  Therefore, it helps to
+Index-based search can be significantly faster on slow file systems and when
+file system caching is ineffective: if the file system on a drive searched is
+not cached in RAM, then indexing will speed up search.  Therefore, it helps to
 speed up searching files that weren't recently accessed.  On the other hand, if
 files are already cached in RAM, because files were read recently, then
 indexing will not necesarily speed up search, obviously.  See also Q&A below.
 
-A typical example of an index-based search on the ugrep source code repository:
+A typical example of an index-based search, e.g. on the ugrep repository:
 
     $ cd drive/ugrep
     $ ugrep-indexer -I
@@ -63,7 +63,8 @@ time as the initial indexing process.
 Index-based search is most effective when searching a lot of files and when
 your regex patterns aren't matching too much, i.e. we want to limit the use of
 unlimited repeats `*` and `+` and limit the use of Unicode character classes
-when possible.  This reduces the ugrep start-up time (see Q&A below).
+when possible.  This reduces the ugrep start-up time and limits the rate of
+false positive pattern matches (see Q&A below).
 
 Quick examples
 --------------
@@ -106,8 +107,15 @@ If desired but not required, install with:
 Future enhancements
 -------------------
 
-- Index the contents of compressed files and archives to search them faster.
-- The option to create one index file, e.g. specified explicitly to ugrep.
+- Index the contents of compressed files and archives to search them faster by
+  skipping non-matching archives.
+
+- Add an option to create one index file, e.g. specified explicitly to ugrep.
+  This could further improve indexed search speed if the index file is located
+  on a fast file system.  Otherwise, do not expect much improvement or even
+  possible slow down, since a single index file cannot be searched concurrently
+  and more index entries will be checked when in fact directories are skipped
+  (skipping their indexes too).  Experiments will tell.
 
 Q&A
 ---
