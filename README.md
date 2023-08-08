@@ -8,16 +8,14 @@ searching on file systems with ugrep.
 searcher that supports index-based searching as of v3.12.5.
 
 Indexing-based search makes sense if you're doing a recursive search on a lot
-of files.  Index-based searching is typically faster, except for pathelogical
-cases when searching a few files with patterns that match a lot (see Q&A
-below).
+of files that have not changed after indexing.
 
 Index-based search is significantly faster on slow file systems or when file
-system caching is ineffective.  If the file system on a drive searched is not
-cached in RAM, then indexing will speed up search.  So it helps to search
-files that aren't recently accessed.  On the other hand, if files are already
-cached in RAM because files were read before, then indexing will not necesarily
-speed up search obviously.
+system caching is ineffective: if the file system on a drive searched is not
+cached in RAM, then indexing will speed up search.  Therefore, it helps to
+speed up searching files that weren't recently accessed.  On the other hand, if
+files are already cached in RAM, because files were read recently, then
+indexing will not necesarily speed up search, obviously.  See also Q&A below.
 
 A typical example of an index-based search:
 
