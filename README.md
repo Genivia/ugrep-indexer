@@ -50,9 +50,9 @@ of indexing:
     Searched 1317 files in 28 directories in 0.109 seconds with 8 threads: 1 matching (0.07593%)
     Skipped 1316 of 1317 files with indexes not matching any search patterns
 
-Speed increases may be significantly higher than 10x for this small demo,
-depending on several factors, the size of the files indexed and the read speed
-of the file system.
+Speed increases may be significantly higher in general compared to the 10x for
+this small demo, depending on several factors, the size of the files indexed
+and the read speed of the file system.
 
 If any files and directories were changed after indexing, then ugrep `--index`
 will always search these additions and changes made to the file system by
