@@ -18,21 +18,21 @@ speed up searching files that weren't recently accessed.  On the other hand, if
 files are already cached in RAM, because files were read recently, then
 indexing will not necesarily speed up search, obviously.  See also Q&A below.
 
-A typical example of an index-based search:
+A typical example of an index-based search on the ugrep source code repository:
 
     $ cd drive/ugrep
     $ ugrep-indexer -I
 
     12245871 bytes scanned and indexed with 19% noise on average
-         1317 files indexed in 28 directories
-            0 new directories indexed
-         1317 new files indexed
-            0 modified files indexed
-            0 deleted files removed from indexes
-          128 binary files skipped with --ignore-binary
-            0 symbolic links skipped
-            0 devices skipped
-      5588843 bytes indexing storage increase at 4243 bytes/file
+        1317 files indexed in 28 directories
+           0 new directories indexed
+        1317 new files indexed
+           0 modified files indexed
+           0 deleted files removed from indexes
+         128 binary files skipped with --ignore-binary
+           0 symbolic links skipped
+           0 devices skipped
+     5588843 bytes indexing storage increase at 4243 bytes/file
 
 Normal searching without indexing takes 1.07 seconds after unmounting the
 `drive` and mounting again to clear FS cache to see the effect of indexing:
@@ -53,6 +53,9 @@ of indexing:
 
     Searched 1317 files in 28 directories in 0.109 seconds with 8 threads: 1 matching (0.07593%)
     Skipped 1316 of 1317 files with indexes not matching any search patterns
+
+Speed increases may be significantly higher than 10x depending on several
+factors, the size of the files indexed and the read speed of the file system.
 
 If any files and directories were changed after indexing, then ugrep `--index`
 will always search these additions and changes made to the file system by
@@ -184,8 +187,8 @@ storage overhead:
            0 devices skipped
      2756843 bytes indexing storage increase at 2093 bytes/file
 
-Indexed search is still a lot faster than non-indexed search by 6x instead of
-10x, with 129 files actually searched instead of just one:
+Indexed search is still a lot faster than non-indexed search by 6x for this
+example instead of 10x, with 129 files actually searched instead of just one:
 
     Searched 1317 files in 28 directories in 0.181 seconds with 8 threads: 1 matching (0.07593%)
     Skipped 1188 of 1317 files with indexes not matching any search patterns
