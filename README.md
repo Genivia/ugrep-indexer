@@ -178,9 +178,9 @@ skip all files with zero matches.
 
 Regex patterns are converted internally by ugrep with option `--index` to hash
 tables for up to the first 16 bytes of the regex patterns specified, possibly
-shorter in order to reduce construction time.  Therefore, first characters of a
-regex pattern to search are most critical to limit so-called false positive
-matches that will slow down searching.
+shorter in order to reduce construction time.  Therefore, the first characters
+of a regex pattern to search are most critical to limit so-called false
+positive matches that will slow down searching.
 
 ### Q: What is indexing accuracy?
 
@@ -239,3 +239,11 @@ Unicode character classes and wildcards are used, especially with the unlimited
 `*` and `+` repeats.  To find out how the start-up time increases, use option
 `ugrep --index -r PATTERN /dev/null --stats=vm` to search /dev/null with your
 PATTERN.
+
+### Q: Why are index files not compressed?
+
+Index files should be very dense in information content and that is the case
+with this new indexing algorithm of ugrep that I designed and implemented.  The
+denser an index file is, the more compact it accurately represents the original
+file data.  That makes it hard or impossible to compress index files.  This is
+also a good indicator of how effective an index file will be in practice.
