@@ -165,6 +165,31 @@ matches that will slow down searching.
 
 ### Q: What is indexing accuracy?
 
+If file storage space is at a premium, you can dial down the index storage
+overhead by specifying a lower indexing accuracy.  However, indexing at a lower
+accuracy might increase the false positive rate of indexing, which can lower
+search performance.
+
+Indexing the example from above with level 3 (option `-3`) halves the indexing
+storage overhead:
+
+    12245871 bytes scanned and indexed with 31% noise on average
+        1317 files indexed in 28 directories
+           0 new directories indexed
+        1317 new files indexed
+           0 modified files indexed
+           0 deleted files removed from indexes
+         128 binary files skipped with --ignore-binary
+           0 symbolic links skipped
+           0 devices skipped
+     2756843 bytes indexing storage increase at 2093 bytes/file
+
+Indexed search is still a lot faster than non-indexed search by 6x instead of
+10x, with 129 files actually searched instead of just one:
+
+    Searched 1317 files in 28 directories in 0.181 seconds with 8 threads: 1 matching (0.07593%)
+    Skipped 1188 of 1317 files with indexes not matching any search patterns
+
 Indexing is a form of lossy compression.  The higher the indexing accuracy, the
 faster ugrep search performance should be by skipping more files that do not
 match.  A higher accuracy reduces noise (less lossy).  A high level of noise
