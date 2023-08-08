@@ -7,10 +7,6 @@ searching on file systems with ugrep.
 [ugrep](https://github.com/Genivia/ugrep) is a grep-compatible ultra fast file
 searcher that supports index-based searching as of v3.12.5.
 
-Simply put, indexing-based search makes sense if you're doing a recursive
-search on a lot of files that have not changed after indexing and have not been
-recently accessed or searched already.
-
 Index-based search is significantly faster on slow file systems and when file
 system caching is ineffective: if the file system on a drive searched is not
 cached in RAM, then indexing will speed up search.  Therefore, it helps to
