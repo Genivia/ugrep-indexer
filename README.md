@@ -60,8 +60,8 @@ comparing file and directory time stamps.  Simply re-index to bring the
 indexing up to date.  Re-indexing is incremental, so it will not take as much
 time as the initial indexing process.
 
-Index-based search is most effective when searching a lot of files and when our
-regex patterns aren't matching too much, i.e. we want to limit the use of
+Index-based search is most effective when searching a lot of files and when
+your regex patterns aren't matching too much, i.e. we want to limit the use of
 unlimited repeats `*` and `+` and limit the use of Unicode character classes
 when possible.  This reduces the ugrep start-up time (see Q&A below).
 
