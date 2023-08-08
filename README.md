@@ -10,8 +10,14 @@ searcher that supports index-based searching as of v3.12.5.
 Indexing-based search makes sense if you're doing a recursive search on a lot
 of files.  Index-based searching is typically faster, except for pathelogical
 cases when searching a few files with patterns that match a lot (see Q&A
-below).  Index-based search is significantly faster on slow file systems or
-when file system caching is ineffective.
+below).
+
+Index-based search is significantly faster on slow file systems or when file
+system caching is ineffective.  If the file system on a drive searched is not
+cached in RAM, then indexing will speed up search.  So it helps to search
+files that aren't frequentl accessed.  On the other hand, if files are already
+cached in RAM because files were read before, then indexing will not necesarily
+speed up search.
 
 A typical example of an index-based search:
 
@@ -30,7 +36,7 @@ A typical example of an index-based search:
       5588843 bytes indexing storage increase at 4243 bytes/file
 
 Normal searching without indexing takes 1.07 seconds after unmounting the
-`drive` and mounting again to clear FS cache for a fair comparison:
+`drive` and mounting again to clear FS cache to see the effect of indexing:
 
     $ cd drive/ugrep
     $ ugrep -I -l 'std::chrono' --stats
@@ -39,8 +45,8 @@ Normal searching without indexing takes 1.07 seconds after unmounting the
     Searched 1317 files in 28 directories in 1.07 seconds with 8 threads: 1 matching (0.07593%)
 
 With indexing, searching only takes 0.109 seconds, which is 10 times faster,
-after unmounting `drive` and mounting again to clear FS cache for a fair
-comparison:
+after unmounting `drive` and mounting again to clear FS cache to see the effect
+of indexing:
 
     $ cd drive/ugrep
     $ ugrep --index -I -l 'std::chrono' --stats
