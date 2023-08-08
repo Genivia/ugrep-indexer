@@ -126,6 +126,11 @@ Indexing adds a hidden index file `._UG#_Store` to each directory indexed.
 Files indexed are scanned (never changed!) by ugrep-indexer to generate index
 files.
 
+The size of the index files depends on the specified accuracy, with `-0` the
+lowest (small index files) and `-9` the highest (large index files).  The
+default accuracy is `-5`.  See the next Q for details on the impact of accuracy
+on indexing size versus search speed.
+
 If any files or directories were updated, added or deleted after indexing, then
 you can run ugrep-indexer again.  This incrementally updates all indexes.
 
