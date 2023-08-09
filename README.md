@@ -4,6 +4,10 @@ A file indexer to accelerate grepping
 The *ugrep-indexer* utility recursively indexes files to accelerate recursive
 grepping.
 
+*Note: this is a 0.9 beta version subject to change and improvements based on
+experiments and user feedback.  The implementation has been extensively tested
+for correctness.  Additional features and performance improvements are planned.*
+
 [ugrep](https://github.com/Genivia/ugrep) is a grep-compatible ultra fast file
 searcher that supports index-based searching as of v3.12.5.
 
@@ -243,7 +247,8 @@ PATTERN.
 ### Q: Why are index files not compressed?
 
 Index files should be very dense in information content and that is the case
-with this new indexing algorithm of ugrep that I designed and implemented.  The
-denser an index file is, the more compact it accurately represents the original
-file data.  That makes it hard or impossible to compress index files.  This is
-also a good indicator of how effective an index file will be in practice.
+with this new indexing algorithm for ugrep that I designed and implemented.
+The denser an index file is, the more compact it accurately represents the
+original file data.  That makes it hard or impossible to compress index files.
+This is also a good indicator of how effective an index file will be in
+practice.
