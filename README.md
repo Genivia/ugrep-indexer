@@ -92,6 +92,11 @@ directory tree to non-indexed:
 
     ugrep-indexer -d
 
+Decrease index file storage to a minimum by decreasing indexing accuracy from 5
+(default) to 0:
+
+    ugrep-indexer -If0
+
 Increase search performance by increasing the indexing accuracy from 5
 (default) to 7 at a cost of larger index files:
 
