@@ -70,8 +70,7 @@ rate but increases index storage overhead.  Likewise, a lower accuracy
 decreases search performance but reduces index storage overhead.
 
 If file storage space is at a premium, you can dial down the index storage
-overhead by specifying a lower indexing accuracy.  On the other hand, indexing
-at a lower accuracy may decrease search performance.
+overhead by specifying a lower indexing accuracy.
 
 Indexing the example from above with level 0 (option `-0`) reduces the indexing
 storage overhead 8.6 times, from 4243 bytes per file to only 490 bytes per file:
@@ -93,10 +92,10 @@ example instead of 10x, with 16 files actually searched instead of just one:
     Searched 1317 files in 28 directories in 0.139 seconds with 8 threads: 1 matching (0.07593%)
     Skipped 1301 of 1317 files with indexes not matching any search patterns
 
-However, regex patterns that are more complex than this example may have a
-higher false positive rate, which is the rate of files that are considered
-possibly matching when they are not.  A higher false positive rate may reduce
-search speeds.
+On the other hand, regex patterns that are more complex than this example may
+have a higher false positive rate, which is the rate of files that are
+considered possibly matching when they are not.  A higher false positive rate
+may reduce search speeds.
 
 Index-based search is most effective when searching a lot of files and when
 your regex patterns aren't matching too much, i.e. we want to limit the use of
