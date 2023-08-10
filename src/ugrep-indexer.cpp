@@ -594,7 +594,7 @@ bool index(const std::string& pathname, uint8_t *hashes, size_t& size, float& no
 
     half_noise /= 8 * half;
 
-    // stop at accuracy 0 -> 70% and 9 -> 10% default 5 -> 36.7% (4 -> 43.3%, 6 -> 30%)
+    // stop at accuracy 0 -> 80% and 9 -> 10% default 5 -> 41.1% (4 -> 48.9%, 6 -> 33%)
     if (100.0 * half_noise >= 10.0 + 70.0 * (9 - flag_accuracy) / 9.0)
       break;
 

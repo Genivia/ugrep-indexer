@@ -18,6 +18,12 @@ speed up searching files that weren't recently accessed.  On the other hand, if
 files are already cached in RAM, because files were read recently, then
 indexing will not necesarily speed up search, obviously.  See also Q&A below.
 
+If any files and directories were changed after indexing, then ugrep `--index`
+will always search these additions and changes made to the file system by
+comparing file and directory time stamps.  If many files were added or changed,
+then simply re-index to bring the indexing up to date.  Re-indexing is
+incremental, so it will not take as much time as the initial indexing process.
+
 A typical example of an index-based search, e.g. on the ugrep repository:
 
     $ cd drive/ugrep
@@ -58,11 +64,39 @@ Speed increases may be significantly higher in general compared to the 10x for
 this small demo, depending on several factors, the size of the files indexed
 and the read speed of the file system.
 
-If any files and directories were changed after indexing, then ugrep `--index`
-will always search these additions and changes made to the file system by
-comparing file and directory time stamps.  Simply re-index to bring the
-indexing up to date.  Re-indexing is incremental, so it will not take as much
-time as the initial indexing process.
+The indexing algorithm that I designed and implemented is *provably monotonic*:
+a higher accuracy increases search performance by reducing the false positive
+rate but increases index storage overhead.  Likewise, a lower accuracy
+decreases search performance but reduces index storage overhead.
+
+If file storage space is at a premium, you can dial down the index storage
+overhead by specifying a lower indexing accuracy.  On the other hand, indexing
+at a lower accuracy may decrease search performance.
+
+Indexing the example from above with level 0 (option `-0`) reduces the indexing
+storage overhead 8.6 times, from 4243 bytes per file to only 490 bytes per file:
+
+    12245871 bytes scanned and indexed with 42% noise on average
+        1317 files indexed in 28 directories
+           0 new directories indexed
+        1317 new files indexed
+           0 modified files indexed
+           0 deleted files removed from indexes
+         128 binary files skipped with --ignore-binary
+           0 symbolic links skipped
+           0 devices skipped
+      646123 bytes indexing storage increase at 490 bytes/file
+
+Indexed search is still a lot faster than non-indexed search by 7.7x for this
+example instead of 10x, with 16 files actually searched instead of just one:
+
+    Searched 1317 files in 28 directories in 0.139 seconds with 8 threads: 1 matching (0.07593%)
+    Skipped 1301 of 1317 files with indexes not matching any search patterns
+
+However, regex patterns that are more complex than this example may have a
+higher false positive rate, which is the rate of files that are considered
+possibly matching when they are not.  A higher false positive rate may reduce
+search speeds.
 
 Index-based search is most effective when searching a lot of files and when
 your regex patterns aren't matching too much, i.e. we want to limit the use of
@@ -192,35 +226,6 @@ of a regex pattern to search are most critical to limit so-called false
 positive matches that will slow down searching.
 
 ### Q: What is indexing accuracy?
-
-If file storage space is at a premium, you can dial down the index storage
-overhead by specifying a lower indexing accuracy.  However, indexing at a lower
-accuracy might increase the false positive rate of indexing, which can lower
-search performance.
-
-Indexing the example from above with level 0 (option `-0`) reduces the indexing
-storage overhead 8.6 times, from 4243 bytes per file to only 490 bytes per file:
-
-    12245871 bytes scanned and indexed with 42% noise on average
-        1317 files indexed in 28 directories
-           0 new directories indexed
-        1317 new files indexed
-           0 modified files indexed
-           0 deleted files removed from indexes
-         128 binary files skipped with --ignore-binary
-           0 symbolic links skipped
-           0 devices skipped
-      646123 bytes indexing storage increase at 490 bytes/file
-
-Indexed search is still a lot faster than non-indexed search by 7.7x for this
-example instead of 10x, with 16 files actually searched instead of just one:
-
-    Searched 1317 files in 28 directories in 0.139 seconds with 8 threads: 1 matching (0.07593%)
-    Skipped 1301 of 1317 files with indexes not matching any search patterns
-
-However, regex patterns that are more complex than this example may have a
-higher false positive rate, which might reduce indexed search speeds with this
-low indexing accuracy.
 
 Indexing is a form of lossy compression.  The higher the indexing accuracy, the
 faster ugrep search performance should be by skipping more files that do not

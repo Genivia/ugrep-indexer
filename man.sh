@@ -77,6 +77,11 @@ tree to non-indexed:
 .IP
 $ ugrep-indexer -d
 .PP
+Decrease index file storage to a minimum by decreasing indexing accuracy from 5
+(default) to 0:
+.IP
+$ ugrep-indexer -If0
+.PP
 Increase search performance by increasing the indexing accuracy from 5
 (default) to 7 at a cost of larger index files:
 .IP

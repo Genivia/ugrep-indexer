@@ -1,4 +1,4 @@
-.TH UGREP-INDEXER "1" "August 06, 2023" "ugrep-indexer 0.9" "User Commands"
+.TH UGREP-INDEXER "1" "August 09, 2023" "ugrep-indexer 0.9" "User Commands"
 .SH NAME
 \fBugrep-indexer\fR -- file indexer for accelerated ugrep search
 .SH SYNOPSIS
@@ -87,6 +87,11 @@ Recursively delete all hidden ._UG#_Store index files to restore the directory
 tree to non-indexed:
 .IP
 $ ugrep-indexer -d
+.PP
+Decrease index file storage to a minimum by decreasing indexing accuracy from 5
+(default) to 0:
+.IP
+$ ugrep-indexer -If0
 .PP
 Increase search performance by increasing the indexing accuracy from 5
 (default) to 7 at a cost of larger index files:
