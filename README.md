@@ -1,7 +1,7 @@
-A monotonic indexer to accelerate grepping
-==========================================
+A monotonic indexer to speed up grepping
+========================================
 
-The *ugrep-indexer* utility recursively indexes files to accelerate recursive
+The *ugrep-indexer* utility recursively indexes files to speed up recursive
 grepping.
 
 *Note: this is a 0.9 beta version of a new generation of "monotonic indexers".
@@ -14,17 +14,17 @@ searcher that supports index-based searching as of v3.12.5.
 
 Index-based search can be significantly faster on slow file systems and when
 file system caching is ineffective: if the file system on a drive searched is
-not cached in RAM, i.e. "cold", then indexing will speed up search.  Therefore,
-it helps to speed up searching files that weren't recently accessed.  On the
-other hand, if files are already cached in RAM, because files were read
-recently, then indexing will not necesarily speed up search, obviously.  See
-also Q&A below.
+not cached in RAM, i.e. it is "cold", then indexing will speed up search.
+Therefore, it helps to speed up searching files that weren't recently accessed.
+On the other hand, if files are already cached in RAM, because files were read
+recently, then indexing will not necesarily speed up search, obviously.
 
-If any files and directories were changed after indexing, then searching will
-always search these additions and changes made to the file system by comparing
-file and directory time stamps.  If many files were added or changed, then
-we simply re-index to bring the indexing up to date.  Re-indexing is
-incremental, so it will not take as much time as the initial indexing process.
+Indexing should be safe and not skip updated files that may now match.  If any
+files and directories were changed after indexing, then searching will always
+search these additions and changes made to the file system by comparing file
+and directory time stamps.  If many files were added or changed, then we simply
+re-index to bring the indexing up to date.  Re-indexing is incremental, so it
+will not take as much time as the initial indexing process.
 
 A typical example of an index-based search, e.g. on the ugrep 3.12.6
 repository placed on a separate drive:
@@ -44,16 +44,15 @@ repository placed on a separate drive:
      5605227 bytes indexing storage increase at 4256 bytes/file
 
 Normal searching on a cold file system without indexing takes 1.02 seconds
-after unmounting the `drive` and mounting again to clear FS cache to see the
+after unmounting the `drive` and mounting again to clear FS cache to record the
 effect of indexing:
 
-    $ cd drive/ugrep
     $ ugrep -I -l 'std::chrono' --stats
     src/ugrep.cpp
 
     Searched 1317 files in 28 directories in 1.02 seconds with 8 threads: 1 matching (0.07593%)
 
-Ripgrep 13.0.0 takes longer with 1.18 seconds for the same search (ripgrep
+Ripgrep 13.0.0 takes longer with 1.18 seconds for the same cold search (ripgrep
 skips binary files by default, so option `-I` is not specified):
 
     $ time rg -l 'std::chrono'
@@ -62,31 +61,34 @@ skips binary files by default, so option `-I` is not specified):
 
 By contrast, with indexing, searching a cold file system only takes 0.109
 seconds with ugrep, which is 12 times faster, after unmounting `drive` and
-mounting again to clear FS cache to see the effect of indexing:
+mounting again to clear FS cache to record the effect of indexing:
 
-    $ cd drive/ugrep
     $ ugrep --index -I -l 'std::chrono' --stats
     src/ugrep.cpp
 
-    Searched 1317 files in 28 directories in 0.0842 seconds with 8 threads: 1 matching (0.07593%)
+    Searched 1317 files in 28 directories in 0.0487 seconds with 8 threads: 1 matching (0.07593%)
     Skipped 1316 of 1317 files with indexes not matching any search patterns
 
-Speed increases to recursively search file systems for regex pattern matches
-may be significantly higher in general compared to the 12x for this small demo,
-depending on several factors, the size of the files indexed and the read speed
-of the file system.
+There is always some variance in the elapsed time with 0.0487 seconds the best
+time of four search runs that produced a search time range of 0.0487 (21x speed
+up) to 0.0983 seconds (10x speed up).
+
+The speed increase may be significantly higher in general compared to the 12x
+for this small demo, depending on several factors, the size of the files
+indexed, the read speed of the file system and assuming most files are cold.
 
 The indexing algorithm that I designed is *provably monotonic*: a higher
 accuracy guarantees an increased search performance by reducing the false
 positive rate, but also increases index storage overhead.  Likewise, a lower
 accuracy decreases search performance, but also reduces the index storage
-overhead.  Therefore, I call this indexer a *monotonic indexer*.
+overhead.  Therefore, I named my indexer a *monotonic indexer*.
 
 If file storage space is at a premium, then we can dial down the index storage
 overhead by specifying a lower indexing accuracy.
 
 Indexing the example from above with level 0 (option `-0`) reduces the indexing
-storage overhead 8.6 times, from 4256 bytes per file to only 490 bytes per file:
+storage overhead by 8.6 times, from 4256 bytes per file to a measly 490 bytes
+per file:
 
     12247077 bytes scanned and indexed with 42% noise on average
         1317 files indexed in 28 directories
@@ -102,19 +104,54 @@ storage overhead 8.6 times, from 4256 bytes per file to only 490 bytes per file:
 Indexed search is still a lot faster by 12x than non-indexed for this example,
 with 16 files actually searched (15 false positives):
 
-    Searched 1317 files in 28 directories in 0.0845 seconds with 8 threads: 1 matching (0.07593%)
+    Searched 1317 files in 28 directories in 0.0722 seconds with 8 threads: 1 matching (0.07593%)
     Skipped 1301 of 1317 files with indexes not matching any search patterns
 
-On the other hand, regex patterns that are more complex than this example may
-have a higher false positive rate, which is the rate of files that are
-considered possibly matching when they are not.  A higher false positive rate
-may reduce search speeds.
+Regex patterns that are more complex than this example may have a higher false
+positive rate naturally, which is the rate of files that are considered
+possibly matching when they are not.  A higher false positive rate may reduce
+search speeds when the rate is large enough to be impactful.
 
-Index-based search is most effective when searching a lot of files and when
-regex patterns aren't matching too much, i.e. we want to limit the use of
-unlimited repeats `*` and `+` and limit the use of Unicode character classes
-when possible.  This reduces the ugrep start-up time and limits the rate of
-false positive pattern matches (see Q&A below).
+The following table shows how indexing accuracy affects indexing storage
+and the average noise per file indexed.  The rightmost columns show the search
+speed and false positive rate for `ugrep --index -I -l 'std::chrono'`:
+
+| acc. | index storage (KB) | average noise | false positives | search time (s) |
+| ---- | -----------------: | ------------: | --------------: | --------------: |
+| `-0` |                631 |           42% |              15 |          0.0722 |
+| `-1` |               1276 |           39% |               1 |          0.0506 |
+| `-2` |               1576 |           36% |               0 |          0.0487 |
+| `-3` |               2692 |           31% |               0 |            unch |
+| `-4` |               2966 |           28% |               0 |            unch |
+| `-5` |               4953 |           23% |               0 |            unch |
+| `-6` |               5474 |           19% |               0 |            unch |
+| `-7` |               9513 |           15% |               0 |            unch |
+| `-8` |              10889 |           11% |               0 |            unch |
+| `-9` |              13388 |            7% |               0 |            unch |
+
+If the specified regex matches many more possible patterns, for example with
+the search `ugrep --index -I -l '(todo|TODO)[: ]'`, then we may observe a
+higher rate of false positives among the 1317 files searched, resulting in
+slightly longer search times:
+
+| acc. | false positives | search time (s) |
+| ---- | --------------: | --------------: |
+| `-0` |             189 |           0.292 |
+| `-1` |              69 |           0.122 |
+| `-2` |              43 |           0.103 |
+| `-3` |              19 |           0.101 |
+| `-4` |              16 |           0.097 |
+| `-5` |               2 |           0.096 |
+| `-6` |               1 |            unch |
+| `-7` |               0 |            unch |
+| `-8` |               0 |            unch |
+| `-9` |               0 |            unch |
+
+To summarize, index-based search is most effective when searching a lot of
+files and when regex patterns aren't matching too much, i.e. we want to limit
+the use of unlimited repeats `*` and `+` and limit the use of Unicode character
+classes when possible.  This reduces the ugrep start-up time and limits the
+rate of false positive pattern matches (see Q&A below).
 
 Quick examples
 --------------
@@ -171,6 +208,9 @@ Future enhancements
   possible slow down, since a single index file cannot be searched concurrently
   and more index entries will be checked when in fact directories are skipped
   (skipping their indexes too).  Experiments will tell.
+
+- Indexing tiny files might not be effective to speed up grepping.  This needs
+  further investigation.  The indexer could skip such tiny files for example.
 
 Q&A
 ---
