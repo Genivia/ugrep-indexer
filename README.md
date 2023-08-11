@@ -4,20 +4,21 @@ A monotonic indexer to accelerate grepping
 The *ugrep-indexer* utility recursively indexes files to accelerate recursive
 grepping.
 
-*Note: this is a 0.9 beta version of a new generation of "monotonic indexers",
-subject to change and improvements based on experiments and user feedback.
-Regardless, this implementation has been extensively tested for correctness.
-Additional features and performance improvements are planned.*
+*Note: this is a 0.9 beta version of a new generation of "monotonic indexers".
+This release is subject to change and improvements based on experiments and
+user feedback.  Regardless, this implementation has been extensively tested for
+correctness.  Additional features and performance improvements are planned.*
 
 [ugrep](https://github.com/Genivia/ugrep) is a grep-compatible ultra fast file
 searcher that supports index-based searching as of v3.12.5.
 
 Index-based search can be significantly faster on slow file systems and when
 file system caching is ineffective: if the file system on a drive searched is
-not cached in RAM, then indexing will speed up search.  Therefore, it helps to
-speed up searching files that weren't recently accessed.  On the other hand, if
-files are already cached in RAM, because files were read recently, then
-indexing will not necesarily speed up search, obviously.  See also Q&A below.
+not cached in RAM, i.e. "cold", then indexing will speed up search.  Therefore,
+it helps to speed up searching files that weren't recently accessed.  On the
+other hand, if files are already cached in RAM, because files were read
+recently, then indexing will not necesarily speed up search, obviously.  See
+also Q&A below.
 
 If any files and directories were changed after indexing, then searching will
 always search these additions and changes made to the file system by comparing
@@ -25,44 +26,53 @@ file and directory time stamps.  If many files were added or changed, then
 we simply re-index to bring the indexing up to date.  Re-indexing is
 incremental, so it will not take as much time as the initial indexing process.
 
-A typical example of an index-based search, e.g. on the ugrep repository:
+A typical example of an index-based search, e.g. on the ugrep 3.12.6
+repository placed on a separate drive:
 
     $ cd drive/ugrep
     $ ugrep-indexer -I
 
-    12245871 bytes scanned and indexed with 19% noise on average
+    12247077 bytes scanned and indexed with 19% noise on average
         1317 files indexed in 28 directories
-           0 new directories indexed
+          28 new directories indexed
         1317 new files indexed
            0 modified files indexed
            0 deleted files removed from indexes
          128 binary files skipped with --ignore-binary
            0 symbolic links skipped
            0 devices skipped
-     5588843 bytes indexing storage increase at 4243 bytes/file
+     5605227 bytes indexing storage increase at 4256 bytes/file
 
-Normal searching without indexing takes 1.07 seconds after unmounting the
-`drive` and mounting again to clear FS cache to see the effect of indexing:
+Normal searching on a cold file system without indexing takes 1.02 seconds
+after unmounting the `drive` and mounting again to clear FS cache to see the
+effect of indexing:
 
     $ cd drive/ugrep
     $ ugrep -I -l 'std::chrono' --stats
     src/ugrep.cpp
 
-    Searched 1317 files in 28 directories in 1.07 seconds with 8 threads: 1 matching (0.07593%)
+    Searched 1317 files in 28 directories in 1.02 seconds with 8 threads: 1 matching (0.07593%)
 
-With indexing, searching only takes 0.109 seconds, which is 10 times faster,
-after unmounting `drive` and mounting again to clear FS cache to see the effect
-of indexing:
+Ripgrep 13.0.0 takes longer with 1.18 seconds for the same search (ripgrep
+skips binary files by default, so option `-I` is not specified):
+
+    $ time rg -l 'std::chrono'
+    src/ugrep.cpp
+        1.18 real         0.01 user         0.06 sys
+
+By contrast, with indexing, searching a cold file system only takes 0.109
+seconds with ugrep, which is 12 times faster, after unmounting `drive` and
+mounting again to clear FS cache to see the effect of indexing:
 
     $ cd drive/ugrep
     $ ugrep --index -I -l 'std::chrono' --stats
     src/ugrep.cpp
 
-    Searched 1317 files in 28 directories in 0.109 seconds with 8 threads: 1 matching (0.07593%)
+    Searched 1317 files in 28 directories in 0.0842 seconds with 8 threads: 1 matching (0.07593%)
     Skipped 1316 of 1317 files with indexes not matching any search patterns
 
 Speed increases to recursively search file systems for regex pattern matches
-may be significantly higher in general compared to the 10x for this small demo,
+may be significantly higher in general compared to the 12x for this small demo,
 depending on several factors, the size of the files indexed and the read speed
 of the file system.
 
@@ -76,9 +86,9 @@ If file storage space is at a premium, then we can dial down the index storage
 overhead by specifying a lower indexing accuracy.
 
 Indexing the example from above with level 0 (option `-0`) reduces the indexing
-storage overhead 8.6 times, from 4243 bytes per file to only 490 bytes per file:
+storage overhead 8.6 times, from 4256 bytes per file to only 490 bytes per file:
 
-    12245871 bytes scanned and indexed with 42% noise on average
+    12247077 bytes scanned and indexed with 42% noise on average
         1317 files indexed in 28 directories
            0 new directories indexed
         1317 new files indexed
@@ -89,10 +99,10 @@ storage overhead 8.6 times, from 4243 bytes per file to only 490 bytes per file:
            0 devices skipped
       646123 bytes indexing storage increase at 490 bytes/file
 
-Indexed search is still a lot faster than non-indexed search by 7.7x for this
-example instead of 10x, with 16 files actually searched instead of just one:
+Indexed search is still a lot faster by 12x than non-indexed for this example,
+with 16 files actually searched (15 false positives):
 
-    Searched 1317 files in 28 directories in 0.139 seconds with 8 threads: 1 matching (0.07593%)
+    Searched 1317 files in 28 directories in 0.0845 seconds with 8 threads: 1 matching (0.07593%)
     Skipped 1301 of 1317 files with indexes not matching any search patterns
 
 On the other hand, regex patterns that are more complex than this example may
