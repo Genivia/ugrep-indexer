@@ -22,11 +22,11 @@ potential match, thus we avoid searching all files.
 Indexing should be safe and not skip updated files that may now match.  If any
 files and directories were changed after indexing, then searching will always
 search these additions and changes made to the file system by comparing file
-and directory time stamps.  If many files were added or changed, then we simply
-re-index to bring the indexing up to date.  Re-indexing is incremental, so it
-will not take as much time as the initial indexing process.
+and directory time stamps.  If many files were added or changed, then we might
+want to re-index to bring the indexing up to date.  Re-indexing is incremental,
+so it will not take as much time as the initial indexing process.
 
-A typical example of an index-based search, e.g. on the ugrep 3.12.6
+A typical example of an index-based search, e.g. on the ugrep v3.12.6
 repository placed on a separate drive:
 
     $ cd drive/ugrep
@@ -146,6 +146,9 @@ slightly longer search times:
 | `-7` |               0 |            unch |
 | `-8` |               0 |            unch |
 | `-9` |               0 |            unch |
+
+Accucacy `-5` is the default, which tends to work well to search with regex
+patterns of modest complexity.
 
 One word of caution.  There is always a tiny bit of overhead to check the
 indexes.  This means that if all files are already cached in RAM, because files
