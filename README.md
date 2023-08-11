@@ -15,9 +15,9 @@ searcher that supports index-based searching as of v3.12.5.
 Index-based search can be significantly faster on slow file systems and when
 file system caching is ineffective: if the file system on a drive searched is
 not cached in RAM, i.e. it is "cold", then indexing will speed up search.
-Therefore, it helps to speed up searching files that weren't recently accessed.
-On the other hand, if files are already cached in RAM, because files were read
-recently, then indexing will not necesarily speed up search, obviously.
+It only searches those files that may match a specified regex pattern by using
+an index of the file.  This index allows for a quick check if there is a
+potential match, thus we avoid searching all files.
 
 Indexing should be safe and not skip updated files that may now match.  If any
 files and directories were changed after indexing, then searching will always
@@ -147,11 +147,19 @@ slightly longer search times:
 | `-8` |               0 |            unch |
 | `-9` |               0 |            unch |
 
+One word of caution.  There is always a tiny bit of overhead to check the
+indexes.  This means that if all files are already cached in RAM, because files
+were searched or read recently, then indexing will not necesarily speed up
+search, obviously.  In that case a non-indexed search might be faster.
+Furthermore, an index-based search has a longer start-up time.  This start-up
+time increases when Unicode character classes and wildcards are used that must
+be converted to hash tables.
+
 To summarize, index-based search is most effective when searching a lot of
-files and when regex patterns aren't matching too much, i.e. we want to limit
-the use of unlimited repeats `*` and `+` and limit the use of Unicode character
-classes when possible.  This reduces the ugrep start-up time and limits the
-rate of false positive pattern matches (see Q&A below).
+cold files and when regex patterns aren't matching too much, i.e. we want to
+limit the use of unlimited repeats `*` and `+` and limit the use of Unicode
+character classes when possible.  This reduces the ugrep start-up time and
+limits the rate of false positive pattern matches (see Q&A below).
 
 Quick examples
 --------------
