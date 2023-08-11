@@ -64,10 +64,11 @@ Speed increases may be significantly higher in general compared to the 10x for
 this small demo, depending on several factors, the size of the files indexed
 and the read speed of the file system.
 
-The indexing algorithm that I designed and implemented is *provably monotonic*:
-a higher accuracy increases search performance by reducing the false positive
-rate but increases index storage overhead.  Likewise, a lower accuracy
-decreases search performance but reduces index storage overhead.
+The indexing algorithm that I designed is *provably monotonic*: a higher
+accuracy guarantees an increased search performance by reducing the false
+positive rate, but also increases index storage overhead.  Likewise, a lower
+accuracy decreases search performance, but also reduces the index storage
+overhead.  Therefore, I call this indexer a *monotonic indexer*.
 
 If file storage space is at a premium, you can dial down the index storage
 overhead by specifying a lower indexing accuracy.
