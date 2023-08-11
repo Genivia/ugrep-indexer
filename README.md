@@ -19,11 +19,11 @@ speed up searching files that weren't recently accessed.  On the other hand, if
 files are already cached in RAM, because files were read recently, then
 indexing will not necesarily speed up search, obviously.  See also Q&A below.
 
-If any files and directories were changed after indexing, then ugrep `--index`
-will always search these additions and changes made to the file system by
-comparing file and directory time stamps.  If many files were added or changed,
-then simply re-index to bring the indexing up to date.  Re-indexing is
-incremental, so it will not take as much time as the initial indexing process.
+If any files and directories were changed after indexing, then searching will
+always search these additions and changes made to the file system by comparing
+file and directory time stamps.  If many files were added or changed, then
+simply re-index to bring the indexing up to date.  Re-indexing is incremental,
+so it will not take as much time as the initial indexing process.
 
 A typical example of an index-based search, e.g. on the ugrep repository:
 
