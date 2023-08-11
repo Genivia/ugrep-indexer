@@ -22,8 +22,8 @@ indexing will not necesarily speed up search, obviously.  See also Q&A below.
 If any files and directories were changed after indexing, then searching will
 always search these additions and changes made to the file system by comparing
 file and directory time stamps.  If many files were added or changed, then
-simply re-index to bring the indexing up to date.  Re-indexing is incremental,
-so it will not take as much time as the initial indexing process.
+we simply re-index to bring the indexing up to date.  Re-indexing is
+incremental, so it will not take as much time as the initial indexing process.
 
 A typical example of an index-based search, e.g. on the ugrep repository:
 
@@ -72,7 +72,7 @@ positive rate, but also increases index storage overhead.  Likewise, a lower
 accuracy decreases search performance, but also reduces the index storage
 overhead.  Therefore, I call this indexer a *monotonic indexer*.
 
-If file storage space is at a premium, you can dial down the index storage
+If file storage space is at a premium, then we can dial down the index storage
 overhead by specifying a lower indexing accuracy.
 
 Indexing the example from above with level 0 (option `-0`) reduces the indexing
@@ -101,7 +101,7 @@ considered possibly matching when they are not.  A higher false positive rate
 may reduce search speeds.
 
 Index-based search is most effective when searching a lot of files and when
-your regex patterns aren't matching too much, i.e. we want to limit the use of
+regex patterns aren't matching too much, i.e. we want to limit the use of
 unlimited repeats `*` and `+` and limit the use of Unicode character classes
 when possible.  This reduces the ugrep start-up time and limits the rate of
 false positive pattern matches (see Q&A below).
