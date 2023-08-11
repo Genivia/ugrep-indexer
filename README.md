@@ -4,9 +4,10 @@ A monotonic file indexer to accelerate grepping
 The *ugrep-indexer* utility recursively indexes files to accelerate recursive
 grepping.
 
-*Note: this is a 0.9 beta version subject to change and improvements based on
-experiments and user feedback.  The implementation has been extensively tested
-for correctness.  Additional features and performance improvements are planned.*
+*Note: this is a 0.9 beta version of a new generation of "monotonic indexers",
+subject to change and improvements based on experiments and user feedback.
+Regardless, this implementation has been extensively tested for correctness.
+Additional features and performance improvements are planned.*
 
 [ugrep](https://github.com/Genivia/ugrep) is a grep-compatible ultra fast file
 searcher that supports index-based searching as of v3.12.5.
