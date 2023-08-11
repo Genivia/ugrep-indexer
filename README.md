@@ -1,5 +1,5 @@
-A file indexer to accelerate grepping
-=====================================
+A monotonic file indexer to accelerate grepping
+===============================================
 
 The *ugrep-indexer* utility recursively indexes files to accelerate recursive
 grepping.
@@ -60,9 +60,10 @@ of indexing:
     Searched 1317 files in 28 directories in 0.109 seconds with 8 threads: 1 matching (0.07593%)
     Skipped 1316 of 1317 files with indexes not matching any search patterns
 
-Speed increases may be significantly higher in general compared to the 10x for
-this small demo, depending on several factors, the size of the files indexed
-and the read speed of the file system.
+Speed increases to recursively search file systems for regex pattern matches
+may be significantly higher in general compared to the 10x for this small demo,
+depending on several factors, the size of the files indexed and the read speed
+of the file system.
 
 The indexing algorithm that I designed is *provably monotonic*: a higher
 accuracy guarantees an increased search performance by reducing the false
