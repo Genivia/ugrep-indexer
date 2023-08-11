@@ -1,5 +1,5 @@
-A monotonic file indexer to accelerate grepping
-===============================================
+A monotonic indexer to accelerate grepping
+==========================================
 
 The *ugrep-indexer* utility recursively indexes files to accelerate recursive
 grepping.
