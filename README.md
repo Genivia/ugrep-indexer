@@ -73,9 +73,9 @@ There is always some variance in the elapsed time with 0.0487 seconds the best
 time of four search runs that produced a search time range of 0.0487 (21x speed
 up) to 0.0983 seconds (10x speed up).
 
-The speed increase may be significantly higher in general compared to the 12x
-for this small demo, depending on several factors, the size of the files
-indexed, the read speed of the file system and assuming most files are cold.
+The speed increase may be significantly higher in general compared to this
+small demo, depending on several factors, the size of the files indexed, the
+read speed of the file system and assuming most files are cold.
 
 The indexing algorithm that I designed is *provably monotonic*: a higher
 accuracy guarantees an increased search performance by reducing the false
