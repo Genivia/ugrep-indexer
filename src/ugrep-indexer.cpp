@@ -34,7 +34,7 @@
 @copyright (c) BSD-3 License - see LICENSE.txt
 */
 
-#define UGREP_INDEXER_VERSION "0.9 beta"
+#define UGREP_INDEXER_VERSION "0.9.1 beta"
 
 // check if we are compiling for a windows OS, but not Cygwin or MinGW
 #if (defined(__WIN32__) || defined(_WIN32) || defined(WIN32) || defined(__BORLANDC__)) && !defined(__CYGWIN__) && !defined(__MINGW32__) && !defined(__MINGW64__)
@@ -104,14 +104,23 @@
 #include <vector>
 #include <stack>
 
+// number of bytes to gulp into the buffer to index a file
 #define BUF_SIZE 65536
+
+// smallest possible power-of-two size of an index of a file, shoud be > 61
 #define MIN_SIZE 128
 
+// default --ignore-files=FILE argument
 #define DEFAULT_IGNORE_FILE ".gitignore"
 
+// fixed constant strings
 const char ugrep_index_filename[] = "._UG#_Store";
 const char ugrep_index_file_magic[5] = "UG#\x03";
 
+// command-line optional PATH argument
+const char *arg_pathname = NULL;
+
+// command-line options
 int flag_accuracy = 6;
 bool flag_check = false;
 bool flag_decompress = false;
@@ -131,20 +140,26 @@ struct Ignore {
   std::vector<std::string> dirs;
 };
 
-// stack of ignore files/dirs
+// stack of ignore file/dir globs per ignore-file found
 std::stack<Ignore> ignore_stack;
 
 // entry data extracted from directory contents, moves pathname to this entry
 struct Entry {
 
+  // indexing is initiated with the pathname to the root of the directory to index
   Entry(const char *pathname = ".")
     :
       pathname(pathname), // the working dir by default
       base(0),
       mtime(~0ULL), // max time to make sure we check the working directory for updates
       size(0)
-  { }
+  {
+    const char *sep = strrchr(pathname, PATHSEPCHR);
+    if (sep != NULL)
+      base = strlen(sep) - 1;
+  }
 
+  // new pathname entry, note this moves the pathname to the entry that owns it now
   Entry(std::string& pathname, size_t base, uint64_t mtime, off_t size)
     :
       pathname(std::move(pathname)),
@@ -175,7 +190,7 @@ struct Entry {
   }
 
   std::string pathname; // full pathname
-  size_t      base;     // size of the basename in the pathname
+  size_t      base;     // length of the basename in the pathname
   uint64_t    mtime;    // modification time
   off_t       size;     // file size
 
@@ -193,7 +208,8 @@ void version()
 // display a help message and exit
 void help()
 {
-  std::cout << "Usage: ugrep-indexer [-0|...|-9] [-.] [-c|-d|-f] [-I] [-q] [-S] [-s] [-X] [-z]\n\n\
+  std::cout << "\nUsage:\n\nugrep-indexer [-0|...|-9] [-.] [-c|-d|-f] [-I] [-q] [-S] [-s] [-X] [-z] [PATH]\n\n\
+    PATH    Optional pathname to the root of the directory tree to index.\n\n\
     -0, -1, -2, -3, ..., -9, --accuracy=DIGIT\n\
             Specifies indexing accuracy.  A low accuracy reduces the indexing\n\
             storage overhead at the cost of a higher rate of false positive\n\
@@ -392,6 +408,14 @@ void options(int argc, const char **argv)
         }
       }
     }
+    else if (arg_pathname == NULL)
+    {
+      arg_pathname = arg;
+    }
+    else
+    {
+      usage("argument PATH already specified as ", arg_pathname);
+    }
   }
 
   if (flag_check)
@@ -408,7 +432,6 @@ inline int fopenw_s(FILE **file, const char *filename, const char *mode)
 #if defined(HAVE_F_RDAHEAD)
   if (strchr(mode, 'a') == NULL && strchr(mode, 'w') == NULL)
   {
-    // removed O_NOATIME which may fail
 #if defined(O_NOCTTY)
     int fd = open(filename, O_RDONLY | O_NOCTTY);
 #else
@@ -874,7 +897,7 @@ void cat(const std::string& pathname, std::stack<Entry>& dir_entries, std::vecto
 }
 
 // recursively delete index files
-void deleter()
+void deleter(const char *pathname)
 {
   flag_no_messages = true;
 
@@ -891,7 +914,11 @@ void deleter()
   uint64_t index_time;
   uint64_t last_time;
 
-  dir_entries.emplace();
+  // pathname to the directory tree to index or .
+  if (pathname == NULL)
+    dir_entries.emplace();
+  else
+    dir_entries.emplace(pathname);
 
   // recurse subdirectories breadth-first to remove index files
   while (!dir_entries.empty())
@@ -901,6 +928,7 @@ void deleter()
 
     cat(visit.pathname, dir_entries, file_entries, num_dirs, num_links, num_other, ign_dirs, ign_files, index_time, last_time, true);
 
+    // if index time is nonzero, there is a valid index file in this directory we should remove
     if (index_time > 0)
     {
       index_filename.assign(visit.pathname).append(PATHSEPSTR).append(ugrep_index_filename);
@@ -910,7 +938,7 @@ void deleter()
 }
 
 // recursively index files
-void indexer()
+void indexer(const char *pathname)
 {
   std::stack<Entry> dir_entries;
   std::vector<Entry> file_entries;
@@ -933,7 +961,11 @@ void indexer()
   float sum_noise = 0;
   uint8_t hashes[65536];
 
-  dir_entries.emplace();
+  // pathname to the directory tree to index or .
+  if (pathname == NULL)
+    dir_entries.emplace();
+  else
+    dir_entries.emplace(pathname);
 
   // recurse subdirectories
   while (!dir_entries.empty())
@@ -1209,9 +1241,9 @@ int main(int argc, const char **argv)
   options(argc, argv);
 
   if (flag_delete)
-    deleter();
+    deleter(arg_pathname);
   else
-    indexer();
+    indexer(arg_pathname);
 
   return EXIT_SUCCESS;
 }

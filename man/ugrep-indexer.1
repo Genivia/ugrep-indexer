@@ -1,4 +1,4 @@
-.TH UGREP-INDEXER "1" "August 09, 2023" "ugrep-indexer 0.9" "User Commands"
+.TH UGREP-INDEXER "1" "August 12, 2023" "ugrep-indexer 0.9.1" "User Commands"
 .SH NAME
 \fBugrep-indexer\fR -- file indexer for accelerated ugrep search
 .SH SYNOPSIS
@@ -8,6 +8,10 @@ The \fBugrep-indexer\fR utility recursively indexes files to accelerate ugrep
 recursive searches with \fBugrep\fR option \fB--index\fR.
 .PP
 The following options are available:
+Usage:
+ugrep\-indexer [\fB\-0\fR|...|\fB\-9\fR] [\fB\-.\fR] [\fB\-c\fR|\fB\-d\fR|\fB\-f\fR] [\fB\-I\fR] [\fB\-q\fR] [\fB\-S\fR] [\fB\-s\fR] [\fB\-X\fR] [\fB\-z\fR] [\fIPATH\fR]
+.TP
+PATH    Optional pathname to the root of the directory tree to index.
 .TP
 \fB\-0\fR, \fB\-1\fR, \fB\-2\fR, \fB\-3\fR, ..., \fB\-9\fR, \fB\-\-accuracy\fR=\fIDIGIT\fR
 Specifies indexing accuracy.  A low accuracy reduces the indexing
@@ -59,7 +63,7 @@ encountered during indexing.  The default FILE is `.gitignore'.
 \fB\-z\fR, \fB\-\-decompress\fR
 Index the contents of compressed files and archives.
 This option is not yet available in this version.
-ugrep\-indexer 0.9 beta
+ugrep\-indexer 0.9.1 beta
 License BSD\-3\-Clause: <https://opensource.org/licenses/BSD\-3\-Clause>
 Written by Robert van Engelen and others: <https://github.com/Genivia/ugrep>
 .SH "EXIT STATUS"
