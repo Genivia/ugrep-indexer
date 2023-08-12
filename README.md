@@ -254,6 +254,14 @@ take some time to complete a full indexing pass over a large directory tree.
 When indexing completes, ugrep-indexer displays the results of indexing.  The
 total size of the indexes added and average indexing noise is also reported.
 
+Scanning a file to index results in a 64KB index hashes table.  Then,
+ugrep-indexer halves the table with bit compression using bitwise-and as long
+as the target accuracy is not exceeded.  Halving is made possible by the fact
+that the table encodes hashes for 8 windows at offsets from the start of the
+pattern, corresponding to the 8 bits per index hashing table cell.  Combining
+the two halves of the table may flip some bits to zero from one, which may
+cause a false positive match.  This proves the monotonicity of the indexer.
+
 The ugrep-indexer understands "binary files", which can be skipped and not
 indexed with ugrep-indexer option `-I` (`--ignore-binary`).  This is useful
 when searching with ugrep option `-I` (`--ignore-binary`) to ignore binary
@@ -333,6 +341,14 @@ string:
       }
       return true;
     }
+
+The prime 61 hash was chosen among many other possible hashing functions using
+a realistic experimental setup.  A candidate hashing function is tested by
+repreatedly searching a randomly-drawn word from a 100MB Wikipedia file that
+has one, two or three mutated characters.  The mutation is made to ensure it
+does not correspond to an actual valid word in the Wikipedia file.  Then the
+false positive rate is recorded when a mutated word matches the file.  A hash
+function with a minimal false positive rate should be a good candidate overall.
 
 ### Q: What is indexing accuracy?
 
