@@ -59,8 +59,8 @@ skips binary files by default, so option `-I` is not specified):
     src/ugrep.cpp
         1.18 real         0.01 user         0.06 sys
 
-By contrast, with indexing, searching a cold file system only takes 0.109
-seconds with ugrep, which is 12 times faster, after unmounting `drive` and
+By contrast, with indexing, searching a cold file system only takes 0.0487
+seconds with ugrep, which is 21 times faster, after unmounting `drive` and
 mounting again to clear FS cache to record the effect of indexing:
 
     $ ugrep --index -I -l 'std::chrono' --stats
