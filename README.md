@@ -254,7 +254,7 @@ take some time to complete a full indexing pass over a large directory tree.
 When indexing completes, ugrep-indexer displays the results of indexing.  The
 total size of the indexes added and average indexing noise is also reported.
 
-Scanning a file to index results in a 64KB index hashes table.  Then,
+Scanning a file to index results in a 64KB indexing hashes table.  Then, the
 ugrep-indexer halves the table with bit compression using bitwise-and as long
 as the target accuracy is not exceeded.  Halving is made possible by the fact
 that the table encodes hashes for 8 windows at offsets from the start of the
@@ -296,20 +296,20 @@ indexes.
 Regex patterns are converted internally by ugrep with option `--index` to a
 form of hash tables for up to the first 16 bytes of the regex patterns
 specified, possibly shorter in order to reduce construction time.  Therefore,
-the first characters of a regex pattern to search are most critical to limit
+the first 8 characters of a regex pattern to search are most critical to limit
 so-called false positive matches that may slow down searching.
 
-More specifically, a regex pattern is converted to a DFA.  An indexing hash
-finite automaton (HFA) is constructed on top of the DFA to compactly represent
-hash tables as state transitions with labelled edges.  This HFA consists of up
-to eight layers, each shifted by one byte to represent the next 8-byte window
-over the pattern.  Each HFA layer encodes index hashes for that part of the
-pattern.  The index hash function chosen is "additive", meaning the next byte
-is added when hashed with the previous hash.  This is very important as it
-critically reduces the HFA construction overhead.  We can now encode labelled
-HFA transitions to states as multiple edges with 16-bit hash value ranges
-instead of a set of single edges each with an individual hash value.  To this
-end, I use my open-ended ranges library `reflex::ORanges<T>` derived from
+In ugrep, a regex pattern is converted to a DFA.  An indexing hash finite
+automaton (HFA) is constructed on top of the DFA to compactly represent hash
+tables as state transitions with labelled edges.  This HFA consists of up to
+eight layers, each shifted by one byte to represent the next 8-byte window over
+the pattern.  Each HFA layer encodes index hashes for that part of the pattern.
+The index hash function chosen is "additive", meaning the next byte is added
+when hashed with the previous hash.  This is very important as it critically
+reduces the HFA construction overhead.  We can now encode labelled HFA
+transitions to states as multiple edges with 16-bit hash value ranges instead
+of a set of single edges each with an individual hash value.  To this end, I
+use my open-ended ranges library `reflex::ORanges<T>` derived from
 `std::set<T>`.
 
 A very simple single string `maybe_match()` function with the prime 61 index
@@ -343,12 +343,23 @@ string:
     }
 
 The prime 61 hash was chosen among many other possible hashing functions using
-a realistic experimental setup.  A candidate hashing function is tested by
-repreatedly searching a randomly-drawn word from a 100MB Wikipedia file that
-has one, two or three mutated characters.  The mutation is made to ensure it
-does not correspond to an actual valid word in the Wikipedia file.  Then the
-false positive rate is recorded when a mutated word matches the file.  A hash
-function with a minimal false positive rate should be a good candidate overall.
+a realistic experimental setup.  A candidate hashing function was tested by
+repreatedly searching a randomly-drawn word from a 100MB Wikipedia file.
+The word was mutated with one, two or three random letters.  This mutation is
+checked to make ensure it does not correspond to an actual valid word in the
+Wikipedia file.  Then the false positive rate was recorded whenever a mutated
+word matches the file.  A hash function with a minimal false positive rate
+should be a good candidate overall.
+
+By using a window of 8 (or shorter depending on the pattern length) the false
+positive rate is lower compared to standard Bloom filters.  More specifically,
+*N²* hash functions are used instead of *N* in a Bloom filter.  For shorter
+patterns, *N* is often too small to limit false positives.  Therefore, *N²* is
+more effective.  It also rejects any pattern from a match that has a character
+anywhere in the first 8 bytes of the pattern does not actually occur anywhere
+in an indexed file, whereas a standard Bloom filter might have a false positive
+match.  Furthermore, the bit addressing used to index the hashes table enables
+efficient table compression.
 
 ### Q: What is indexing accuracy?
 
