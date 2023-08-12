@@ -237,9 +237,6 @@ lowest (small index files) and `-9` the highest (large index files).  The
 default accuracy is `-5`.  See the next Q for details on the impact of accuracy
 on indexing size versus search speed.
 
-If any files or directories were updated, added or deleted after indexing, then
-you can run ugrep-indexer again.  This incrementally updates all indexes.
-
 Indexing *never follows symbolic links to directories*, because symbolically
 linked directories may be located anywhere in a file system, or in another file
 system, where we do not want to add index files.  You can still index symbolic
@@ -248,18 +245,19 @@ links to files with ugrep-indexer option `-S`.
 Option `-v` (`--verbose`) displays the indexing progress and "noise" of each
 file indexed.  Noise is a measure of *entropy* or *randomness* in the input.  A
 higher level of noise means that indexing was less accurate in representing the
-contents of a file.  For example, a file with random data is hard to index
-accurately and will have a high level of noise.
+contents of a file.  For example, a large file with random data is hard to
+index accurately and will have a high level of noise.
 
-Indexing is not a fast process (ugrep-indexer 0.9 is not yet multi-threaded)
-and can take some time to complete.  When indexing completes, ugrep-indexer
-displays the results of indexing.  The total size of the indexes added and
-average indexing noise is also reported.
+The complexity of indexing is linear in the size of a given file to index.
+Practically, it is not a fast process though, not as fast a searching, and may
+take some time to complete a full indexing pass over a large directory tree.
+When indexing completes, ugrep-indexer displays the results of indexing.  The
+total size of the indexes added and average indexing noise is also reported.
 
 The ugrep-indexer understands "binary files", which can be skipped and not
 indexed with ugrep-indexer option `-I` (`--ignore-binary`).  This is useful
 when searching with ugrep option `-I` (`--ignore-binary`) to ignore binary
-files.
+files, which is a typical scenario.
 
 The ugrep-indexer also supports .gitignore files (and similar), specified with
 ugrep-indexer option `-X` (`--ignore-files`).  Ignored files and directories
@@ -282,11 +280,59 @@ Indexed-based search works with all ugrep options except with option `-v`
 Option `-c` (`--count`) with `--index` automatically enables `--min-count=1` to
 skip all files with zero matches.
 
-Regex patterns are converted internally by ugrep with option `--index` to hash
-tables for up to the first 16 bytes of the regex patterns specified, possibly
-shorter in order to reduce construction time.  Therefore, the first characters
-of a regex pattern to search are most critical to limit so-called false
-positive matches that will slow down searching.
+If any files or directories were updated, added or deleted after indexing, then
+ugrep `--index` will always search these when they are present on the recursive
+search path.  You can run ugrep-indexer again to incrementally updates all
+indexes.
+
+Regex patterns are converted internally by ugrep with option `--index` to a
+form of hash tables for up to the first 16 bytes of the regex patterns
+specified, possibly shorter in order to reduce construction time.  Therefore,
+the first characters of a regex pattern to search are most critical to limit
+so-called false positive matches that may slow down searching.
+
+More specifically, a regex pattern is converted to a DFA.  An indexing hash
+finite automaton (HFA) is constructed on top of the DFA to compactly represent
+hash tables as state transitions with labelled edges.  This HFA consists of up
+to eight layers, each shifted by one byte to represent the next 8-byte window
+over the pattern.  Each HFA layer encodes index hashes for that part of the
+pattern.  The index hash function chosen is "additive", meaning the next byte
+is added when hashed with the previous hash.  This is very important as it
+critically reduces the HFA construction overhead.  We can now encode labelled
+HFA transitions to states as multiple edges with 16-bit hash value ranges
+instead of a set of single edges each with an individual hash value.  To this
+end, I use my open-ended ranges library `reflex::ORanges<T>` derived from
+`std::set<T>`.
+
+A very simple single string `maybe_match()` function with the prime 61 index
+hash function is given below to demonstrate index-based searching of a single
+string:
+
+    // prime 61 hashing
+    uint16_t indexhash(uint16_t h, uint8_t b, size_t size)
+    {
+      return ((h << 6) - h - h - h + b) & (size - 1);
+    }
+
+    // return possible match of string given array of hashes of size <= 64K (power of two)
+    bool maybe_match(const char *string, uint8_t *hashes, size_t size)
+    {
+      size_t len = strlen(string); // practically we can and should limit len to e.g. 15 or 16
+      for (const char *window = string; len > 0; ++window, --len)
+      {
+        uint16_t h = window[0] & (size - 1);
+        if (hashes[h] & 0x01)
+          return false
+        size_t k, n = len < 8 ? len : 8;
+        for (k = 1; k < n; ++k)
+        {
+          h = indexhash(h, window[k], size);
+          if (hashes[h] & (1 << k))
+            return false;
+        }
+      }
+      return true;
+    }
 
 ### Q: What is indexing accuracy?
 
