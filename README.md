@@ -19,14 +19,16 @@ It only searches those files that may match a specified regex pattern by using
 an index of the file.  This index allows for a quick check if there is a
 potential match, thus we avoid searching all files.
 
-Indexing should be safe and not skip updated files that may now match.  If any
-files and directories were changed after indexing, then searching will always
-search these additions and changes made to the file system by comparing file
-and directory time stamps.  If many files were added or changed, then we might
-want to re-index to bring the indexing up to date.  Re-indexing is incremental,
-so it will not take as much time as the initial indexing process.
+Indexed-based search should be safe and not skip updated files that may now
+match.  If any files and directories were changed after indexing, then
+searching will always search these additions and changes made to the file
+system by comparing file and directory time stamps.
 
-A typical example of an index-based search, e.g. on the ugrep v3.12.6
+If many files were added or changed, then we might want to re-index to bring
+the indexing up to date.  Re-indexing is incremental, so it will not take as
+much time as the initial indexing process.
+
+A typical but small example of an index-based search, e.g. on the ugrep v3.12.6
 repository placed on a separate drive:
 
     $ cd drive/ugrep
@@ -147,8 +149,8 @@ slightly longer search times:
 | `-8` |               0 |            unch |
 | `-9` |               0 |            unch |
 
-Accucacy `-5` is the default, which tends to work well to search with regex
-patterns of modest complexity.
+Accucacy `-5` is the default, which tends to work very well to search with
+regex patterns of modest complexity.
 
 One word of caution.  There is always a tiny bit of overhead to check the
 indexes.  This means that if all files are already cached in RAM, because files
@@ -162,7 +164,7 @@ To summarize, index-based search is most effective when searching a lot of
 cold files and when regex patterns aren't matching too much, i.e. we want to
 limit the use of unlimited repeats `*` and `+` and limit the use of Unicode
 character classes when possible.  This reduces the ugrep start-up time and
-limits the rate of false positive pattern matches (see Q&A below).
+limits the rate of false positive pattern matches (see also Q&A below).
 
 Quick examples
 --------------
@@ -346,7 +348,7 @@ The prime 61 hash was chosen among many other possible hashing functions using
 a realistic experimental setup.  A candidate hashing function was tested by
 repreatedly searching a randomly-drawn word from a 100MB Wikipedia file.
 The word was mutated with one, two or three random letters.  This mutation is
-checked to make ensure it does not correspond to an actual valid word in the
+checked to make sure it does not correspond to an actual valid word in the
 Wikipedia file.  Then the false positive rate was recorded whenever a mutated
 word matches the file.  A hash function with a minimal false positive rate
 should be a good candidate overall.
