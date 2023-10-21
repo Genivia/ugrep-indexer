@@ -225,6 +225,20 @@ Future enhancements
 - Indexing tiny files might not be effective to speed up grepping.  This needs
   further investigation.  The indexer could skip such tiny files for example.
 
+- Each N-gram Bloom filter has its own "bit tier" in the hash table to avoid
+  hash conflicts.  For example 2-grams do not share any bits with 3-grams.
+  This ensures that we never have any false positives with characters being
+  matched that are not part of the pattern.  However, the 1-gram (single
+  character) bit space is small (256 bits).  Therefore, we waste some bits in
+  larger hash tables.  A possible approach to reduce waste is to combine
+  1-grams with 2-grams to share the same bit space.  This is easy to do if we
+  consider a 1-gram being equal to a 2-gram with the second character set to
+  `\0` (NUL).  We can then expand the "bit tiers" from 8 to 9 to store 9-grams.
+  This will increase the indexing accuracy for longer patterns (9 or longer) at
+  no additional cost.  On the other hand, there will be more false positives
+  with characters being matched that are not part of the pattern when hash
+  tables are small.
+
 Q&A
 ---
 
