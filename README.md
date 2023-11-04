@@ -1,6 +1,8 @@
 A monotonic indexer to speed up grepping
 ========================================
 
+[![ci](https://github.com/Genivia/ugrep-indexer/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Genivia/ugrep-indexer/actions?query=branch%3Amain++)
+
 The *ugrep-indexer* utility recursively indexes files to speed up recursive
 grepping.
 
