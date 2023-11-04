@@ -265,10 +265,10 @@ contents of a file.  For example, a large file with random data is hard to
 index accurately and will have a high level of noise.
 
 The complexity of indexing is linear in the size of a given file to index.
-Practically, it is not a fast process though, not as fast a searching, and may
-take some time to complete a full indexing pass over a large directory tree.
-When indexing completes, ugrep-indexer displays the results of indexing.  The
-total size of the indexes added and average indexing noise is also reported.
+In practice it is not a fast process, not as fast a searching, and may take
+some time to complete a full indexing pass over a large directory tree.  When
+indexing completes, ugrep-indexer displays the results of indexing.  The total
+size of the indexes added and average indexing noise is also reported.
 
 Scanning a file to index results in a 64KB indexing hashes table.  Then, the
 ugrep-indexer halves the table with bit compression using bitwise-and as long
@@ -290,8 +290,10 @@ for files with ugrep option `--ignore-files`.
 
 Indexing can be aborted, for example with CTRL-C, which will not result in a
 loss of search capability with ugrep, but will leave the directory structure
-only partially indexed.  Option `-c` checks for the presence of the indexed
-files and directories.  Run ugrep-indexer again to continue indexing.
+only partially indexed.
+
+Option `-c` checks indexes for stale references and non-indexed files and
+directories.  Run ugrep-indexer again to incrementally update all indexes.
 
 Indexes are deleted with ugrep-indexer option `-d`.
 
@@ -301,18 +303,19 @@ files with thousands of random search patterns.
 
 Indexed-based search works with all ugrep options except with option `-v`
 (`--invert-match`), `--filter`, `-P` (`--perl-regexp`) and `-Z` (`--fuzzy`).
-Option `-c` (`--count`) with `--index` automatically enables `--min-count=1` to
+Option `-c` (`--count`) with `--index` automatically sets `--min-count=1` to
 skip all files with zero matches.
 
 If any files or directories were updated, added or deleted after indexing, then
-ugrep `--index` will always search these when they are present on the recursive
-search path.  You can run ugrep-indexer again to incrementally updates all
-indexes.
+ugrep `--index` will always search these files and directories when they are
+present on the recursive search path.  You can run ugrep-indexer again to
+incrementally update all indexes.
 
 Regex patterns are converted internally by ugrep with option `--index` to a
 form of hash tables for up to the first 16 bytes of the regex patterns
-specified, possibly shorter in order to reduce construction time.  Therefore,
-the first 8 characters of a regex pattern to search are most critical to limit
+specified, possibly shorter in order to reduce construction time when regex
+patterns are complex.  Therefore, the first 8 to 16  characters of a regex
+pattern to search are most critical and should not match too much to limit
 so-called false positive matches that may slow down searching.
 
 In ugrep, a regex pattern is converted to a DFA.  An indexing hash finite
