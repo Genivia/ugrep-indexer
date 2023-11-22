@@ -13,10 +13,23 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+      - uses: cpp-linter/cpp-linter-action@v2
+        id: linter
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          style: file
+          # The following value will only update a single comment
+          # in a pull request's thread. Set it to false to disable the comment.
+          # Set it to true to post a new comment (and delete the old comment).
+          thread-comments: ${{ github.event_name == 'pull_request' && 'update' }}
+      - name: Fail fast?!
+        if: steps.linter.outputs.checks-failed > 0
+        run: echo "Some files failed the linting checks!" || exit 1
       - run: |
           ./build.sh
       - name: Upload
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ugrep-indexer
           path: bin/ugrep-indexer
