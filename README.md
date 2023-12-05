@@ -433,9 +433,8 @@ Archiving (zip/tar/pax/cpio) and compressing files saves disk space.  On the
 other hand, searching archives and compressed files is slower than searching
 regular files.  Indexing archives and compressed files with `ugrep-indexer -z
 -I` and searching them with `ugrep -z -I --index PATTERN` can speed up
-searching when the archives and compressed files that we are not interesed in
-are skipped, when the pattern does not match the index.  On the other hand,
-disk store requirements will increase with the addition of index file entries
-for archives and compressed files.  Note that when archives and compressed
-files contain binaries, then option `-I` will ignore them and not create
-indexes for binary files stored in archives and compressed files.
+searching when the archives and compressed files are skipped when the pattern
+does not match.  On the other hand, disk store requirements will increase with
+the addition of index file entries for archives and compressed files.  Note
+that when archives and compressed files contain binaries, option `-I` ignores
+these archived/compressed binaries.
