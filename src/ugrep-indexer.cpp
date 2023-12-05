@@ -242,7 +242,7 @@ const char ugrep_index_file_magic[5] = "UG#\x03";
 const char *arg_pathname = NULL;
 
 // command-line options
-int    flag_accuracy          = 6;     // -0 ... -9 (--accuracy) default is -6
+int    flag_accuracy          = 5;     // -0 ... -9 (--accuracy) default is -5
 bool   flag_check             = false; // -c (--check)
 bool   flag_decompress        = false; // -z (--decompress)
 bool   flag_delete            = false; // -d (--delete)
@@ -524,7 +524,7 @@ void help()
 {
   std::cout << "\nUsage:\n\nugrep-indexer [-0|...|-9] [-.] [-c|-d|-f] [-I] [-q] [-S] [-s] [-X] [-z] [PATH]\n\n\
     PATH    Optional pathname to the root of the directory tree to index.  The\n\
-            default is to index the working directory tree.\n\n\
+            default is to recursively index the working directory tree.\n\n\
     -0, -1, -2, -3, ..., -9, --accuracy=DIGIT\n\
             Specifies indexing accuracy.  A low accuracy reduces the indexing\n\
             storage overhead at the cost of a higher rate of false positive\n\
@@ -612,8 +612,26 @@ void help()
             "\
             This option is not available in this build configuration of ugrep.\n"
 #endif
-            "\n";
-  version();
+            "\n\
+    Indexes are incrementally updated unless option -f or --force is specified.\n\
+    \n\
+    When option -I or --ignore-binary is specified, binary files are ignored\n\
+    and not indexed.  Searching with ugrep --index still searches binary files\n\
+    unless ugrep option -I or --ignore-binary is specified also.\n\
+    \n\
+    Archives and compressed files are incrementally indexed only when option -z\n\
+    or --decompress is specified.  Otherwise, archives and compressed files are\n\
+    indexed as binary files, or are ignored with option -I or --ignore-binary.\n\
+    \n\
+    To create an indexing log file, specify option -v or --verbose and redirect\n\
+    standard output to a log file.  All messages are sent to standard output.\n\
+    \n\
+    The ugrep-indexer utility exits with one of the following values:\n\
+    0       Indexes are up to date.\n\
+    1       Some indexes appear to be stale and are outdated or missing.\n\
+    \n";
+
+  exit(EXIT_SUCCESS);
 }
 
 // display usage information and exit
@@ -629,7 +647,7 @@ void warning(const char *message, const char *arg = NULL)
   if (flag_no_messages)
     return;
   fflush(stdout);
-  fprintf(stderr, "ugrep-indexer: warning: %s%s%s\n", message, arg != NULL ? " " : "", arg != NULL ? arg : "");
+  printf("ugrep-indexer: warning: %s%s%s\n", message, arg != NULL ? " " : "", arg != NULL ? arg : "");
 }
 
 // display an error message unless option -s (--no-messages)
@@ -645,7 +663,7 @@ void error(const char *message, const char *arg)
   const char *errmsg = strerror(errno);
 #endif
   fflush(stdout);
-  fprintf(stderr, "ugrep-indexer: error: %s%s%s: %s\n", message, arg != NULL ? " " : "", arg != NULL ? arg : "", errmsg);
+  printf("ugrep-indexer: error: %s%s%s: %s\n", message, arg != NULL ? " " : "", arg != NULL ? arg : "", errmsg);
 }
 
 #ifdef HAVE_LIBZ
@@ -655,7 +673,7 @@ void cannot_decompress(const char *pathname, const char *message)
   if (!flag_verbose || flag_no_messages)
     return;
   fflush(stdout);
-  fprintf(stderr, "ugrep-indexer: warning: cannot decompress %s: %s\n", pathname, message != NULL ? message : "");
+  printf("ugrep-indexer: warning: cannot decompress %s: %s\n", pathname, message != NULL ? message : "");
 }
 #endif
 
@@ -816,6 +834,10 @@ void options(int argc, const char **argv)
       usage("argument PATH already specified as ", arg_pathname);
     }
   }
+
+  // -q overrides -v
+  if (flag_quiet)
+    flag_verbose = false;
 
   // -c silently overrides -d and -f
   if (flag_check)
@@ -1430,8 +1452,6 @@ void cat(const std::string& pathname, std::stack<Entry>& dir_entries, std::vecto
 // recursively delete index files
 void deleter(const char *pathname)
 {
-  flag_no_messages = true;
-
   std::stack<Entry> dir_entries;
   std::vector<Entry> file_entries;
   std::string index_filename;
@@ -1444,6 +1464,7 @@ void deleter(const char *pathname)
   int64_t ign_files = 0;
   uint64_t index_time;
   uint64_t last_time;
+  uint64_t num_removed = 0;
 
   // pathname to the directory tree to index or .
   if (pathname == NULL)
@@ -1459,13 +1480,25 @@ void deleter(const char *pathname)
 
     cat(visit.pathname, dir_entries, file_entries, num_dirs, num_links, num_other, ign_dirs, ign_files, index_time, last_time, true);
 
-    // if index time is nonzero, there is a valid index file in this directory we should remove
+    // if index time is nonzero, there is a valid index file in this directory that we should remove
     if (index_time > 0)
     {
       index_filename.assign(visit.pathname).append(PATHSEPSTR).append(ugrep_index_filename);
-      remove(index_filename.c_str());
+      if (remove(index_filename.c_str()) != 0)
+      {
+        error("cannot remove", index_filename.c_str());
+      }
+      else
+      {
+        ++num_removed;
+        if (flag_verbose)
+          printf("%13" PRIu64 " %s\n", num_removed, index_filename.c_str());
+      }
     }
   }
+
+  if (!flag_quiet)
+    printf("\n%13" PRIu64 " indexes removed from %" PRIu64 " directories\n\n", num_removed, num_dirs);
 }
 
 // recursively index files

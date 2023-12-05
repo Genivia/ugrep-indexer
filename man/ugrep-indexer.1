@@ -1,4 +1,4 @@
-.TH UGREP-INDEXER "1" "August 12, 2023" "ugrep-indexer 0.9.1" "User Commands"
+.TH UGREP-INDEXER "1" "December 05, 2023" "ugrep-indexer 0.9.2" "User Commands"
 .SH NAME
 \fBugrep-indexer\fR -- file indexer for accelerated ugrep search
 .SH SYNOPSIS
@@ -11,7 +11,8 @@ The following options are available:
 Usage:
 ugrep\-indexer [\fB\-0\fR|...|\fB\-9\fR] [\fB\-.\fR] [\fB\-c\fR|\fB\-d\fR|\fB\-f\fR] [\fB\-I\fR] [\fB\-q\fR] [\fB\-S\fR] [\fB\-s\fR] [\fB\-X\fR] [\fB\-z\fR] [\fIPATH\fR]
 .TP
-PATH    Optional pathname to the root of the directory tree to index.
+PATH    Optional pathname to the root of the directory tree to index.  The
+default is to recursively index the working directory tree.
 .TP
 \fB\-0\fR, \fB\-1\fR, \fB\-2\fR, \fB\-3\fR, ..., \fB\-9\fR, \fB\-\-accuracy\fR=\fIDIGIT\fR
 Specifies indexing accuracy.  A low accuracy reduces the indexing
@@ -54,18 +55,63 @@ their error messages and warnings are suppressed.
 Display version and exit.
 .TP
 \fB\-v\fR, \fB\-\-verbose\fR
-Produce verbose output.
+Produce verbose output.  Indexed files are indicated with an A for
+archive, C for compressed, B for binary or I for ignored binary.
 .TP
 \fB\-X\fR, \fB\-\-ignore\-files\fR[=\fIFILE\fR]
 Do not index files and directories matching the globs in a FILE
 encountered during indexing.  The default FILE is `.gitignore'.
+This option may be repeated to specify additional files.
 .TP
 \fB\-z\fR, \fB\-\-decompress\fR
-Index the contents of compressed files and archives.
-This option is not yet available in this version.
-ugrep\-indexer 0.9.1 beta
-License BSD\-3\-Clause: <https://opensource.org/licenses/BSD\-3\-Clause>
-Written by Robert van Engelen and others: <https://github.com/Genivia/ugrep>
+Index the contents of compressed files and archives.  When used
+with option \fB\-\-zmax\fR=\fINUM\fR, indexes the contents of compressed files
+and archives stored within archives up to NUM levels deep.
+Supported compression formats: gzip (.gz), compress (.Z), zip,
+bzip2 (requires suffix .bz, .bz2, .bzip2, .tbz, .tbz2, .tb2, .tz2),
+lzma and xz (requires suffix .lzma, .tlz, .xz, .txz),
+lz4 (requires suffix .lz4),
+zstd (requires suffix .zst, .zstd, .tzst),
+brotli (requires suffix .br).
+.TP
+\fB\-\-zmax\fR=\fINUM\fR
+When used with option \fB\-z\fR (\fB\-\-decompress\fR), indexes the contents of
+compressed files and archives stored within archives by up to NUM
+expansion levels deep.  The default \fB\-\-zmax\fR=1 only permits indexing
+uncompressed files stored in cpio, pax, tar and zip archives;
+compressed files and archives are detected as binary files and are
+effectively ignored.  Specify \fB\-\-zmax\fR=2 to index compressed files
+and archives stored in cpio, pax, tar and zip archives.  NUM may
+range from 1 to 99 for up to 99 decompression and de\-archiving
+steps.  Increasing NUM values gradually degrades performance.
+.TP
+Indexes are incrementally updated unless option \fB\-f\fR or \fB\-\-force\fR is specified.
+.TP
+
+.TP
+When option \fB\-I\fR or \fB\-\-ignore\-binary\fR is specified, binary files are ignored
+.TP
+and not indexed.  Searching with ugrep \fB\-\-index\fR still searches binary files
+.TP
+unless ugrep option \fB\-I\fR or \fB\-\-ignore\-binary\fR is specified also.
+.TP
+
+.TP
+Archives and compressed files are incrementally indexed only when option \fB\-z\fR
+.TP
+or \fB\-\-decompress\fR is specified.  Otherwise, archives and compressed files are
+.TP
+indexed as binary files, or are ignored with option \fB\-I\fR or \fB\-\-ignore\-binary\fR.
+.TP
+
+.TP
+To create an indexing log file, specify option \fB\-v\fR or \fB\-\-verbose\fR and redirect
+.TP
+standard output to a log file.  All messages are sent to standard output.
+.TP
+
+.TP
+
 .SH "EXIT STATUS"
 The \fBugrep-indexer\fR utility exits with one of the following values:
 .IP 0
@@ -73,34 +119,41 @@ Indexes are up to date.
 .IP 1
 Indexing check with option \fB-c\fR detected missing and outdated index files.
 .SH EXAMPLES
-Recursively and incrementally index all non-binary files showing progress
+Recursively and incrementally index all non-binary files showing progress:
 .IP
 $ ugrep-indexer -I -v
 .PP
-Index all non-binary files, show progress, follow symbolic links to files (but
-not to directories), and do not index files and directories matching the globs
-in .gitignore:
+Recursively and incrementally index all non-binary files, including non-binary
+files stored in archives and in compressed files, showing progress:
 .IP
-$ ugrep-indexer -I -v -S -X
+$ ugrep-indexer -z -I -v
 .PP
-Recursively force re-indexing of all non-binary files:
+Incrementally index all non-binary files, including archives and compressed
+files, show progress, follow symbolic links to files (but not to directories),
+but do not index files and directories matching the globs in .gitignore:
 .IP
-$ ugrep-indexer -f -I
+$ ugrep-indexer -z -I -v -S -X
+.PP
+Force re-indexing of all non-binary files, including archives and compressed
+files, follow symbolic links to files (but not to directories), but do not
+index files and directories matching the globs in .gitignore:
+.IP
+$ ugrep-indexer -f -z -I -v -S -X
+.PP
+Same, but decrease index file storage to a minimum by decreasing indexing
+accuracy from 5 (default) to 0:
+.IP
+$ ugrep-indexer -f -0 -z -I -v -X
+.PP
+Increase search performance by increasing the indexing accuracy from 5
+(default) to 7 at a cost of larger index files:
+.IP
+$ ugrep-indexer -f7zIvX
 .PP
 Recursively delete all hidden ._UG#_Store index files to restore the directory
 tree to non-indexed:
 .IP
 $ ugrep-indexer -d
-.PP
-Decrease index file storage to a minimum by decreasing indexing accuracy from 5
-(default) to 0:
-.IP
-$ ugrep-indexer -If0
-.PP
-Increase search performance by increasing the indexing accuracy from 5
-(default) to 7 at a cost of larger index files:
-.IP
-$ ugrep-indexer -If7
 .SH BUGS
 Report bugs at:
 .IP

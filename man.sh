@@ -58,34 +58,41 @@ Indexes are up to date.
 .IP 1
 Indexing check with option \fB-c\fR detected missing and outdated index files.
 .SH EXAMPLES
-Recursively and incrementally index all non-binary files showing progress
+Recursively and incrementally index all non-binary files showing progress:
 .IP
 $ ugrep-indexer -I -v
 .PP
-Index all non-binary files, show progress, follow symbolic links to files (but
-not to directories), and do not index files and directories matching the globs
-in .gitignore:
+Recursively and incrementally index all non-binary files, including non-binary
+files stored in archives and in compressed files, showing progress:
 .IP
-$ ugrep-indexer -I -v -S -X
+$ ugrep-indexer -z -I -v
 .PP
-Recursively force re-indexing of all non-binary files:
+Incrementally index all non-binary files, including archives and compressed
+files, show progress, follow symbolic links to files (but not to directories),
+but do not index files and directories matching the globs in .gitignore:
 .IP
-$ ugrep-indexer -f -I
+$ ugrep-indexer -z -I -v -S -X
+.PP
+Force re-indexing of all non-binary files, including archives and compressed
+files, follow symbolic links to files (but not to directories), but do not
+index files and directories matching the globs in .gitignore:
+.IP
+$ ugrep-indexer -f -z -I -v -S -X
+.PP
+Same, but decrease index file storage to a minimum by decreasing indexing
+accuracy from 5 (default) to 0:
+.IP
+$ ugrep-indexer -f -0 -z -I -v -X
+.PP
+Increase search performance by increasing the indexing accuracy from 5
+(default) to 7 at a cost of larger index files:
+.IP
+$ ugrep-indexer -f7zIvX
 .PP
 Recursively delete all hidden ._UG#_Store index files to restore the directory
 tree to non-indexed:
 .IP
 $ ugrep-indexer -d
-.PP
-Decrease index file storage to a minimum by decreasing indexing accuracy from 5
-(default) to 0:
-.IP
-$ ugrep-indexer -If0
-.PP
-Increase search performance by increasing the indexing accuracy from 5
-(default) to 7 at a cost of larger index files:
-.IP
-$ ugrep-indexer -If7
 .SH BUGS
 Report bugs at:
 .IP
