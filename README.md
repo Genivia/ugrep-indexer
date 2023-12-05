@@ -42,7 +42,7 @@ repository placed on a separate drive:
         1317 new files indexed
            0 modified files indexed
            0 deleted files removed from indexes
-         128 binary files skipped with --ignore-binary
+         128 binary files ignored with --ignore-binary
            0 symbolic links skipped
            0 devices skipped
      5605227 bytes indexing storage increase at 4256 bytes/file
@@ -100,7 +100,7 @@ per file:
         1317 new files indexed
            0 modified files indexed
            0 deleted files removed from indexes
-         128 binary files skipped with --ignore-binary
+         128 binary files ignored with --ignore-binary
            0 symbolic links skipped
            0 devices skipped
       646123 bytes indexing storage increase at 490 bytes/file
@@ -175,30 +175,37 @@ Recursively and incrementally index all non-binary files showing progress:
 
     ugrep-indexer -I -v
 
-Index all non-binary files, show progress, follow symbolic links to files (but
-not to directories), and do not index files and directories matching the globs
-in .gitignore:
+Recursively and incrementally index all non-binary files, including non-binary
+files stored in archives and in compressed files, showing progress:
 
-    ugrep-indexer -I -v -S -X
+    ugrep-indexer -z -I -v
 
-Recursively force re-indexing of all non-binary files:
+Incrementally index all non-binary files, including archives and compressed
+files, show progress, follow symbolic links to files (but not to directories),
+but do not index files and directories matching the globs in .gitignore:
 
-    ugrep-indexer -f -I
+    ugrep-indexer -z -I -v -S -X
+
+Force re-indexing of all non-binary files, including archives and compressed
+files, follow symbolic links to files (but not to directories), but do not
+index files and directories matching the globs in .gitignore:
+
+    ugrep-indexer -f -z -I -v -S -X
+
+Same, but decrease index file storage to a minimum by decreasing indexing
+accuracy from 5 (default) to 0:
+
+    ugrep-indexer -f -0 -z -I -v -X
+
+Increase search performance by increasing the indexing accuracy from 5
+(default) to 7 at a cost of larger index files:
+
+    ugrep-indexer -f7zIvX
 
 Recursively delete all hidden `._UG#_Store` index files to restore the
 directory tree to non-indexed:
 
     ugrep-indexer -d
-
-Decrease index file storage to a minimum by decreasing indexing accuracy from 5
-(default) to 0:
-
-    ugrep-indexer -If0
-
-Increase search performance by increasing the indexing accuracy from 5
-(default) to 7 at a cost of larger index files:
-
-    ugrep-indexer -If7
 
 Build steps
 -----------
@@ -214,15 +221,14 @@ If desired but not required, install with:
 Future enhancements
 -------------------
 
-- Index the contents of compressed files and archives to search them faster by
-  skipping non-matching archives.
-
 - Add an option to create one index file, e.g. specified explicitly to ugrep.
   This could further improve indexed search speed if the index file is located
   on a fast file system.  Otherwise, do not expect much improvement or even
   possible slow down, since a single index file cannot be searched concurrently
   and more index entries will be checked when in fact directories are skipped
-  (skipping their indexes too).  Experiments will tell.
+  (skipping their indexes too).  Experiments will tell.  A critical caveat of
+  this approach is that index-based search with `ugrep --index` is no longer
+  "safe": new and modified files that are not indexed yet will not be searched.
 
 - Indexing tiny files might not be effective to speed up grepping.  This needs
   further investigation.  The indexer could skip such tiny files for example.
@@ -231,15 +237,16 @@ Future enhancements
   hash conflicts.  For example 2-grams do not share any bits with 3-grams.
   This ensures that we never have any false positives with characters being
   matched that are not part of the pattern.  However, the 1-gram (single
-  character) bit space is small (256 bits).  Therefore, we waste some bits in
-  larger hash tables.  A possible approach to reduce waste is to combine
-  1-grams with 2-grams to share the same bit space.  This is easy to do if we
-  consider a 1-gram being equal to a 2-gram with the second character set to
-  `\0` (NUL).  We can then expand the "bit tiers" from 8 to 9 to store 9-grams.
-  This will increase the indexing accuracy for longer patterns (9 or longer) at
-  no additional cost.  On the other hand, there will be more false positives
-  with characters being matched that are not part of the pattern when hash
-  tables are small.
+  character) bit space is small (at most 256 bits).  Therefore, we waste some
+  bits in larger hash tables.  A possible approach to reduce waste is to
+  combine 1-grams with 2-grams to share the same bit space.  This is easy to do
+  if we consider a 1-gram being equal to a 2-gram with the second character set
+  to `\0` (NUL).  We can lower the false positive rate with a second 2-gram
+  hash based on a different hash method.  Or we can expand the "bit tiers" from
+  8 to 9 to store 9-grams.  This will increase the indexing accuracy for longer
+  patterns (9 or longer) at no additional cost.  On the other hand, with this
+  change there will be more false positives with characters being matched that
+  are not part of the pattern when hash tables are small.
 
 Q&A
 ---
@@ -280,7 +287,7 @@ pattern, corresponding to the 8 bits per index hashing table cell.  Combining
 the two halves of the table may flip some bits to zero from one, which may
 cause a false positive match.  This proves the monotonicity of the indexer.
 
-The ugrep-indexer understands "binary files", which can be skipped and not
+The ugrep-indexer understands "binary files", which can be ignored and not
 indexed with ugrep-indexer option `-I` (`--ignore-binary`).  This is useful
 when searching with ugrep option `-I` (`--ignore-binary`) to ignore binary
 files, which is a typical scenario.
@@ -394,11 +401,11 @@ minimum is 128 bytes of index storage per file, excluding the file name and
 a 4-byte index header.  The maximum is 64K bytes storage per file for very
 large noisy files.
 
-When searching indexed files, ugrep option `--stats` shows the search
-statistics after the indexing-based search completed.  When many files are not
-skipped from searching due to indexing noise (i.e. false positives), then a
-higher accuracy helps to increase the effectiveness of indexing, which may
-speed up searching.
+When searching indexed files with `ugrep --index --stats`, option `--stats`
+shows the search statistics after the indexing-based search completed.  When
+many files are not skipped from searching due to indexing noise (i.e. false
+positives), then a higher accuracy helps to increase the effectiveness of
+indexing, which may speed up searching.
 
 ### Q: Why is the start-up time of ugrep higher with option --index?
 
@@ -419,3 +426,16 @@ The denser an index file is, the more compact it accurately represents the
 original file data.  That makes it hard or impossible to compress index files.
 This is also a good indicator of how effective an index file will be in
 practice.
+
+### Q: Why index archives and compressed files?
+
+Archiving (zip/tar/pax/cpio) and compressing files saves disk space.  On the
+other hand, searching archives and compressed files is slower than searching
+regular files.  Indexing archives and compressed files with `ugrep-indexer -z
+-I` and searching them with `ugrep -z -I --index PATTERN` can speed up
+searching when the archives and compressed files that we are not interesed in
+are skipped, when the pattern does not match the index.  On the other hand,
+disk store requirements will increase with the addition of index file entries
+for archives and compressed files.  Note that when archives and compressed
+files contain binaries, then option `-I` will ignore them and not create
+indexes for binary files stored in archives and compressed files.
