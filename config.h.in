@@ -10,8 +10,14 @@
 /* Define to 1 if you have the <inttypes.h> header file. */
 #undef HAVE_INTTYPES_H
 
+/* Define to 1 if you have `brotli' library (-lbrotlidec -lbrotlienc) */
+#undef HAVE_LIBBROTLI
+
 /* Define to 1 if you have `bz2' library (-lbz2) */
 #undef HAVE_LIBBZ2
+
+/* Define to 1 if you have `bzip3' library (-lbzip3) */
+#undef HAVE_LIBBZIP3
 
 /* Define to 1 if you have `lz4' library (-llz4) */
 #undef HAVE_LIBLZ4

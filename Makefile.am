@@ -26,6 +26,7 @@ install-data-hook:
 		 echo "|                                                          |"; \
 		 echo "| Thank you for using ugrep!                               |"; \
 		 echo "|                                                          |"; \
+		 echo "|             https://ugrep.com                            |"; \
 		 echo "|             https://github.com/Genivia/ugrep             |"; \
 		 echo "|             https://github.com/Genivia/ugrep-indexer     |"; \
 		 echo "|__________________________________________________________|";

@@ -33,15 +33,29 @@ AC_CANONICAL_HOST
 PLATFORM=${host}
 AC_SUBST(PLATFORM)
 
-AX_CHECK_ZLIB([], [echo "zlib not found: ugrep-indexer option -z is not available"])
+AX_CHECK_ZLIB([], [echo "recommended zlib not found: ugrep-indexer option -z is disabled"])
 
-AX_CHECK_BZLIB([], [echo "libbz2 not found: ugrep-indexer option -z won't index .bz and .bz2 files"])
+AX_CHECK_BZ2LIB([], [echo "recommended libbz2 not found: ugrep-indexer option -z cannot index .bz and .bz2 files"])
 
-AX_CHECK_LZMALIB([], [echo "liblzma not found: ugrep-indexer option -z won't index .lzma and .xz files"])
+AX_CHECK_LZMALIB([], [echo "recommended liblzma not found: ugrep-indexer option -z cannot index .lzma and .xz files"])
 
-AX_CHECK_LZ4LIB([], [echo "liblz4 not found: ugrep-indexer option -z won't index .lz4 files"])
+AX_CHECK_LZ4LIB([], [echo "optional liblz4 not found: install if you want ugrep-indexer option -z to index .lz4 files"])
 
-AX_CHECK_ZSTDLIB([], [echo "libzstd not found: ugrep-indexer option -z won't index .zst files"])
+AX_CHECK_ZSTDLIB([], [echo "optional libzstd not found: install if you want ugrep-indexer option -z to index .zst files"])
+
+AX_CHECK_BROTLILIB([], [echo "optional brotli library not found: install if you want ugrep-indexer option -z to index .br files"])
+
+AC_ARG_WITH(bzip3,
+  [AS_HELP_STRING([--with-bzip3],
+                  [to enable bzip3 library to decompress .bz3 files])],
+  [with_bzip3_library="$withval"],
+  [with_bzip3_library=""])
+if test "x$with_bzip3_library" != "x"; then
+  if test "x$with_bzip3" = "xyes"; then
+    unset with_bzip3
+  fi
+  AX_CHECK_BZIP3LIB([], [echo "optional libbzip3 not found: install if you want ugrep-indexer option -z to index .bz3 files"])
+fi
 
 AC_SUBST([PTHREAD_CFLAGS], [""])
 AC_SUBST([PTHREAD_LIBS], ["-lpthread"])

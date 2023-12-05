@@ -91,7 +91,9 @@ host_triplet = @host@
 bin_PROGRAMS = ugrep-indexer$(EXEEXT)
 subdir = src
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
-am__aclocal_m4_deps = $(top_srcdir)/m4/ax_check_bzlib.m4 \
+am__aclocal_m4_deps = $(top_srcdir)/m4/ax_check_brotlilib.m4 \
+	$(top_srcdir)/m4/ax_check_bz2lib.m4 \
+	$(top_srcdir)/m4/ax_check_bzip3lib.m4 \
 	$(top_srcdir)/m4/ax_check_lz4lib.m4 \
 	$(top_srcdir)/m4/ax_check_lzmalib.m4 \
 	$(top_srcdir)/m4/ax_check_zlib.m4 \

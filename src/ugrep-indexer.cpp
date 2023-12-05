@@ -34,16 +34,26 @@
 @copyright (c) BSD-3 License - see LICENSE.txt
 */
 
-#define UGREP_INDEXER_VERSION "0.9.1 beta"
+#define UGREP_INDEXER_VERSION "0.9.2 beta"
+
+// use a task-parallel thread to decompress the stream into a pipe to search, also handles nested archives
+#define WITH_DECOMPRESSION_THREAD
 
 // check if we are compiling for a windows OS, but not Cygwin or MinGW
 #if (defined(__WIN32__) || defined(_WIN32) || defined(WIN32) || defined(__BORLANDC__)) && !defined(__CYGWIN__) && !defined(__MINGW32__) && !defined(__MINGW64__)
 # define OS_WIN
 #endif
 
-#ifdef OS_WIN
+// 64 bits off_t and fseeko
+#define _FILE_OFFSET_BITS 64
 
-// compiling for a windows OS
+// PRId64 PRIu64
+#define __STDC_FORMAT_MACROS
+
+#ifdef OS_WIN // compiling for a windows OS
+
+// disable min/max macros to use std::min and std::max
+#define NOMINMAX
 
 #include <windows.h>
 #include <tchar.h>
@@ -57,6 +67,10 @@
 #include <time.h>
 #include <string>
 
+#define off_t int64_t
+#define fseeko _fseeki64
+#define ftruncate _chsize_s
+
 #define STDIN_FILENO  0
 #define STDOUT_FILENO 1
 #define STDERR_FILENO 2
@@ -64,12 +78,71 @@
 #define PATHSEPCHR '\\'
 #define PATHSEPSTR "\\"
 
-#else
+// convert a wide Unicode string to an UTF-8 string
+std::string utf8_encode(const std::wstring &wstr)
+{
+  if (wstr.empty())
+    return std::string();
+  int size = WideCharToMultiByte(CP_UTF8, 0, &wstr[0], static_cast<int>(wstr.size()), NULL, 0, NULL, NULL);
+  std::string str(size, 0);
+  WideCharToMultiByte(CP_UTF8, 0, &wstr[0], static_cast<int>(wstr.size()), &str[0], size, NULL, NULL);
+  return str;
+}
 
-// not compiling for a windows OS
+// convert a UTF-8 string to a wide Unicode String
+std::wstring utf8_decode(const std::string &str)
+{
+  if (str.empty())
+    return std::wstring();
+  int size = MultiByteToWideChar(CP_UTF8, 0, &str[0], static_cast<int>(str.size()), NULL, 0);
+  std::wstring wstr(size, 0);
+  MultiByteToWideChar(CP_UTF8, 0, &str[0], static_cast<int>(str.size()), &wstr[0], size);
+  return wstr;
+}
 
-#define _FILE_OFFSET_BITS 64
-#define __STDC_FORMAT_MACROS
+// open Unicode wide string UTF-8 encoded filename
+int fopenw_s(FILE **file, const char *filename, const char *mode)
+{
+  *file = NULL;
+  std::wstring wfilename = utf8_decode(filename);
+  HANDLE hFile;
+  if (strchr(mode, 'a') == NULL && strchr(mode, 'w') == NULL)
+    hFile = CreateFileW(wfilename.c_str(), (strchr(mode, '+') == NULL ? GENERIC_READ : GENERIC_READ | GENERIC_WRITE), FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN, NULL);
+  else if (strchr(mode, 'a') == NULL)
+    hFile = CreateFileW(wfilename.c_str(), (strchr(mode, '+') == NULL ? GENERIC_WRITE : GENERIC_READ | GENERIC_WRITE), FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+  else
+    hFile = CreateFileW(wfilename.c_str(), FILE_APPEND_DATA, FILE_SHARE_READ, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+  if (hFile == INVALID_HANDLE_VALUE)
+    return errno = (GetLastError() == ERROR_ACCESS_DENIED ? EACCES : ENOENT);
+  int fd = _open_osfhandle(reinterpret_cast<intptr_t>(hFile), _O_RDONLY);
+  if (fd == -1)
+  { 
+    CloseHandle(hFile);
+    return errno = EINVAL; 
+  }
+  *file = _fdopen(fd, mode);
+  if (*file == NULL)
+  {
+    _close(fd);
+    return errno ? errno : (errno = EINVAL);
+  }
+  return 0;
+}
+
+// get modification time (micro seconds) from directory entry
+inline uint64_t modified_time(const WIN32_FIND_DATAW& ffd)
+{
+  const struct _FILETIME& time = ffd.ftLastWriteTime;
+  return static_cast<uint64_t>(time.dwLowDateTime) | (static_cast<uint64_t>(time.dwHighDateTime) << 32);
+}
+
+// get file size from directory entry
+inline uint64_t file_size(const WIN32_FIND_DATAW& ffd)
+{
+  return static_cast<uint64_t>(ffd.nFileSizeLow) | (static_cast<uint64_t>(ffd.nFileSizeHigh) << 32);
+}
+
+#else // not compiling for a windows OS
 
 #include <signal.h>
 #include <dirent.h>
@@ -77,7 +150,6 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <cerrno>
-#include <cinttypes>
 #include <cstdlib>
 #include <cstdio>
 #include <cstring>
@@ -91,16 +163,63 @@
 #define PATHSEPCHR '/'
 #define PATHSEPSTR "/"
 
+// open Unicode wide string UTF-8 encoded filename
+int fopenw_s(FILE **file, const char *filename, const char *mode)
+{
+  *file = NULL;
+#if defined(HAVE_F_RDAHEAD)
+  if (strchr(mode, 'a') == NULL && strchr(mode, 'w') == NULL)
+  {
+#if defined(O_NOCTTY)
+    int fd = open(filename, O_RDONLY | O_NOCTTY);
+#else
+    int fd = open(filename, O_RDONLY);
+#endif
+    if (fd < 0)
+      return errno;
+    fcntl(fd, F_RDAHEAD, 1);
+    return (*file = fdopen(fd, mode)) == NULL ? errno ? errno : (errno = EINVAL) : 0;
+  }
+#endif
+  return (*file = fopen(filename, mode)) == NULL ? errno ? errno : (errno = EINVAL) : 0;
+}
+
+// get modification time (micro seconds) from stat
+inline uint64_t modified_time(const struct stat& buf)
+{
+#if defined(HAVE_STAT_ST_ATIM) && defined(HAVE_STAT_ST_MTIM) && defined(HAVE_STAT_ST_CTIM)
+  // tv_sec may be 64 bit, but value is small enough to multiply by 1000000 to fit in 64 bits
+  return static_cast<uint64_t>(static_cast<uint64_t>(buf.st_mtim.tv_sec) * 1000000 + buf.st_mtim.tv_nsec / 1000);
+#elif defined(HAVE_STAT_ST_ATIMESPEC) && defined(HAVE_STAT_ST_MTIMESPEC) && defined(HAVE_STAT_ST_CTIMESPEC)
+  // tv_sec may be 64 bit, but value is small enough to multiply by 1000000 to fit in 64 bits
+  return static_cast<uint64_t>(static_cast<uint64_t>(buf.st_mtimespec.tv_sec) * 1000000 + buf.st_mtimespec.tv_nsec / 1000);
+#else
+  return static_cast<uint64_t>(buf.st_mtime);
+#endif
+}
+
+// get file size from stat
+inline uint64_t file_size(const struct stat& buf)
+{
+  return static_cast<uint64_t>(buf.st_size);
+}
+
 #endif
 
 // use zlib, libbz2, liblzma for option -z
 #ifdef HAVE_LIBZ
 # include "zstream.hpp"
+#ifdef WITH_DECOMPRESSION_THREAD
+# include "zthread.hpp"
+#endif
 #endif
 
 #include "input.h"
 #include "glob.hpp"
+#include <cinttypes>
 #include <iostream>
+#include <algorithm>
+#include <memory>
 #include <vector>
 #include <stack>
 
@@ -113,6 +232,8 @@
 // default --ignore-files=FILE argument
 #define DEFAULT_IGNORE_FILE ".gitignore"
 
+typedef std::vector<std::string> StrVec;
+
 // fixed constant strings
 const char ugrep_index_filename[] = "._UG#_Store";
 const char ugrep_index_file_magic[5] = "UG#\x03";
@@ -121,29 +242,30 @@ const char ugrep_index_file_magic[5] = "UG#\x03";
 const char *arg_pathname = NULL;
 
 // command-line options
-int flag_accuracy = 6;
-bool flag_check = false;
-bool flag_decompress = false;
-bool flag_delete = false;
-bool flag_dereference_files = false;
-bool flag_force = false;
-bool flag_hidden = false;
-bool flag_ignore_binary = false;
-bool flag_no_messages = false;
-bool flag_quiet = false;
-bool flag_verbose = false;
-std::vector<std::string> flag_ignore_files;
+int    flag_accuracy          = 6;     // -0 ... -9 (--accuracy) default is -6
+bool   flag_check             = false; // -c (--check)
+bool   flag_decompress        = false; // -z (--decompress)
+bool   flag_delete            = false; // -d (--delete)
+bool   flag_dereference_files = false; // -S (--dereference-files)
+bool   flag_force             = false; // -f (--force)
+bool   flag_hidden            = false; // -. (--hidden)
+bool   flag_ignore_binary     = false; // -I (--ignore-binary)
+bool   flag_no_messages       = false; // -s (--no-messages)
+bool   flag_quiet             = false; // -q (--quiet)
+bool   flag_verbose           = false; // -v (--verbose)
+size_t flag_zmax              = 1;     // --zmax
+StrVec flag_ignore_files;              // -X (--ignore-files)
 
-// ignore (exclude) files/dirs globs, a starting ! means override to include
+// ignore (exclude) files/dirs globs, a glob prefixed with ! means override to include
 struct Ignore {
-  std::vector<std::string> files;
-  std::vector<std::string> dirs;
+  StrVec files;
+  StrVec dirs;
 };
 
 // stack of ignore file/dir globs per ignore-file found
 std::stack<Ignore> ignore_stack;
 
-// entry data extracted from directory contents, moves pathname to this entry
+// entry data extracted from directory contents, constructor moves pathname string to this entry
 struct Entry {
 
   // indexing is initiated with the pathname to the root of the directory to index
@@ -151,7 +273,7 @@ struct Entry {
     :
       pathname(pathname), // the working dir by default
       base(0),
-      mtime(~0ULL), // max time to make sure we check the working directory for updates
+      mtime(~0ULL), // max time value to make sure we check the working directory for updates
       size(0)
   {
     const char *sep = strrchr(pathname, PATHSEPCHR);
@@ -160,7 +282,7 @@ struct Entry {
   }
 
   // new pathname entry, note this moves the pathname to the entry that owns it now
-  Entry(std::string& pathname, size_t base, uint64_t mtime, off_t size)
+  Entry(std::string& pathname, size_t base, uint64_t mtime, uint64_t size)
     :
       pathname(std::move(pathname)),
       base(base),
@@ -192,16 +314,208 @@ struct Entry {
   std::string pathname; // full pathname
   size_t      base;     // length of the basename in the pathname
   uint64_t    mtime;    // modification time
-  off_t       size;     // file size
+  uint64_t    size;     // file size
 
+};
+
+// Input stream to index
+struct Stream {
+
+  Stream()
+    :
+      file(NULL)
+#ifdef HAVE_LIBZ
+#ifdef WITH_DECOMPRESSION_THREAD
+    , zthread(false, partname)
+#else
+    , is_compressed(false)
+#endif
+#endif
+  { }
+
+  ~Stream()
+  {
+    close();
+  }
+
+  bool open(const char *pathname)
+  {
+    return fopenw_s(&file, pathname, "rb") == 0;
+  }
+
+  void close()
+  {
+    if (file != NULL)
+      fclose(file);
+    input.clear();
+  }
+
+#ifdef HAVE_LIBZ
+
+  bool read_file(const char *pathname, bool& archive)
+  {
+#ifdef WITH_DECOMPRESSION_THREAD
+
+    // we don't know yet if this is an archive until we first read some data
+    archive = false;
+
+    if (flag_decompress)
+    {
+      partname.clear();
+
+      // start decompression thread if not running, get pipe with decompressed input
+      FILE *pipe_in = zthread.start(flag_zmax, pathname, file);
+      if (pipe_in == NULL)
+      {
+        close();
+        return false;
+      }
+
+      // read archive/compressed/plain data from the decompression thread chain pipe
+      input = reflex::Input(pipe_in);
+    }
+    else
+    {
+      input = file;
+    }
+
+    return true;
+
+#else
+
+    // non-threaded decompression, one level only and no tar/pax/cpio and no compressed utf16/32 decoding
+    if (flag_decompress)
+    {
+      // create or open a new zstreambuf
+      if (!zstream)
+        zstream = std::unique_ptr<zstreambuf>(new zstreambuf(pathname, file));
+      else if (!archive)
+        zstream->open(pathname, file);
+
+      is_compressed = zstream->decompressing();
+
+      // get zip info, if indexing a zip
+      const zstreambuf::ZipInfo *zipinfo = zstream->zipinfo();
+
+      // set archive flag when indexing an archive to get the next parts
+      archive = zipinfo != NULL;
+      if (archive)
+        partname = zipinfo->name;
+      else
+        partname.clear();
+
+      // new stream with zstreambuf, delete the old
+      istream = std::unique_ptr<std::istream>(new std::istream(zstream.get()));
+
+      // utf16/32 is no longer auto-converted like FILE*, so this does not index utf16/32 files
+      input = istream.get();
+    }
+    else
+    {
+      archive = false;
+      input = file;
+    }
+
+    return true;
+
+#endif
+  }
+
+  bool read_next_file(const char *pathname, bool& archive)
+  {
+#ifdef WITH_DECOMPRESSION_THREAD
+
+    // -z: open next archived file if any or close the compressed file/archive
+    if (flag_decompress)
+    {
+      // close the input FILE* and its underlying pipe previously created with pipe() and fdopen()
+      if (input.file() != NULL)
+      {
+        // close and unassign input, i.e. input.file() == NULL, also closes pipe_fd[0] per fdopen()
+        fclose(input.file());
+        input.clear();
+      }
+
+      partname.clear();
+
+      // open pipe to the next file or part in an archive if there is a next file
+      FILE *pipe_in = zthread.open_next(pathname);
+      if (pipe_in != NULL)
+      {
+        // assign the next extracted file as input to search
+        input = reflex::Input(pipe_in);
+
+        // start searching the next file in the archive
+        return true;
+      }
+
+      // if not extracting an archive, then read the next file
+      if (!archive)
+        return read_file(pathname, archive);
+
+      // no more archive parts to extract
+      return false;
+    }
+
+    archive = false;
+    input = file;
+
+    return true;
+
+#else
+
+    // -z: open next archived file if any or close the compressed file/archive
+    if (flag_decompress)
+    {
+      partname.clear();
+
+      if (archive)
+      {
+        const zstreambuf::ZipInfo *zipinfo = zstream->zipinfo();
+        // if no more archive parts to extract, then return false
+        if (zipinfo == NULL)
+          return false;
+      }
+    }
+
+    return read_file(pathname, archive);
+
+#endif
+  }
+
+  // return true if decompressing a file in any of the decompression chain stages
+  bool decompressing()
+  {
+#ifdef WITH_DECOMPRESSION_THREAD
+    return zthread.decompressing();
+#else
+    return is_compressed;
+#endif
+  }
+
+#endif
+
+  FILE *file;
+  reflex::Input input;
+  std::string partname;
+
+#ifdef HAVE_LIBZ
+#ifdef WITH_DECOMPRESSION_THREAD
+  Zthread zthread;
+#else
+  bool is_compressed;
+  std::unique_ptr<zstreambuf> zstream;
+  std::unique_ptr<std::istream> istream;
+#endif
+#endif
 };
 
 // display the version info and exit
 void version()
 {
   std::cout << "ugrep-indexer " UGREP_INDEXER_VERSION "\n"
-    "License BSD-3-Clause: <https://opensource.org/licenses/BSD-3-Clause>\n"
-    "Written by Robert van Engelen and others: <https://github.com/Genivia/ugrep>" << std::endl;
+    "License: BSD-3-Clause; ugrep user manual:  https://ugrep.com\n"
+    "Written by Robert van Engelen and others:  https://github.com/Genivia/ugrep\n" << std::endl;
   exit(EXIT_SUCCESS);
 }
 
@@ -209,7 +523,8 @@ void version()
 void help()
 {
   std::cout << "\nUsage:\n\nugrep-indexer [-0|...|-9] [-.] [-c|-d|-f] [-I] [-q] [-S] [-s] [-X] [-z] [PATH]\n\n\
-    PATH    Optional pathname to the root of the directory tree to index.\n\n\
+    PATH    Optional pathname to the root of the directory tree to index.  The\n\
+            default is to index the working directory tree.\n\n\
     -0, -1, -2, -3, ..., -9, --accuracy=DIGIT\n\
             Specifies indexing accuracy.  A low accuracy reduces the indexing\n\
             storage overhead at the cost of a higher rate of false positive\n\
@@ -240,14 +555,64 @@ void help()
     -V, --version\n\
             Display version and exit.\n\
     -v, --verbose\n\
-            Produce verbose output.\n\
+            Produce verbose output.  Indexed files are indicated with an A for\n\
+            archive, C for compressed, B for binary or I for ignored binary.\n\
     -X, --ignore-files[=FILE]\n\
             Do not index files and directories matching the globs in a FILE\n\
             encountered during indexing.  The default FILE is `" DEFAULT_IGNORE_FILE "'.\n\
+            This option may be repeated to specify additional files.\n\
     -z, --decompress\n\
-            Index the contents of compressed files and archives.\n\
-            This option is not yet available in this version.\n\
-\n";
+            Index the contents of compressed files and archives.  When used\n\
+            with option --zmax=NUM, indexes the contents of compressed files\n\
+            and archives stored within archives up to NUM levels deep.\n"
+#ifndef HAVE_LIBZ
+            "\
+            This option is not available in this build of ugrep-indexer.\n"
+#else
+            "\
+            Supported compression formats: gzip (.gz), compress (.Z), zip"
+#ifdef HAVE_LIBBZ2
+            ",\n\
+            bzip2 (requires suffix .bz, .bz2, .bzip2, .tbz, .tbz2, .tb2, .tz2)"
+#endif
+#ifdef HAVE_LIBLZMA
+            ",\n\
+            lzma and xz (requires suffix .lzma, .tlz, .xz, .txz)"
+#endif
+#ifdef HAVE_LIBLZ4
+            ",\n\
+            lz4 (requires suffix .lz4)"
+#endif
+#ifdef HAVE_LIBZSTD
+            ",\n\
+            zstd (requires suffix .zst, .zstd, .tzst)"
+#endif
+#ifdef HAVE_LIBBROTLI
+            ",\n\
+            brotli (requires suffix .br)"
+#endif
+#ifdef HAVE_LIBBZIP3
+            ",\n\
+            bzip3 (requires suffix .bz3)"
+#endif
+            ".\n"
+#endif
+            "\
+    --zmax=NUM\n\
+            When used with option -z (--decompress), indexes the contents of\n\
+            compressed files and archives stored within archives by up to NUM\n\
+            expansion levels deep.  The default --zmax=1 only permits indexing\n\
+            uncompressed files stored in cpio, pax, tar and zip archives;\n\
+            compressed files and archives are detected as binary files and are\n\
+            effectively ignored.  Specify --zmax=2 to index compressed files\n\
+            and archives stored in cpio, pax, tar and zip archives.  NUM may\n\
+            range from 1 to 99 for up to 99 decompression and de-archiving\n\
+            steps.  Increasing NUM values gradually degrades performance.\n"
+#ifndef WITH_DECOMPRESSION_THREAD
+            "\
+            This option is not available in this build configuration of ugrep.\n"
+#endif
+            "\n";
   version();
 }
 
@@ -263,6 +628,7 @@ void warning(const char *message, const char *arg = NULL)
 {
   if (flag_no_messages)
     return;
+  fflush(stdout);
   fprintf(stderr, "ugrep-indexer: warning: %s%s%s\n", message, arg != NULL ? " " : "", arg != NULL ? arg : "");
 }
 
@@ -278,7 +644,38 @@ void error(const char *message, const char *arg)
 #else
   const char *errmsg = strerror(errno);
 #endif
+  fflush(stdout);
   fprintf(stderr, "ugrep-indexer: error: %s%s%s: %s\n", message, arg != NULL ? " " : "", arg != NULL ? arg : "", errmsg);
+}
+
+#ifdef HAVE_LIBZ
+// decompression error, function used by 
+void cannot_decompress(const char *pathname, const char *message)
+{
+  if (!flag_verbose || flag_no_messages)
+    return;
+  fflush(stdout);
+  fprintf(stderr, "ugrep-indexer: warning: cannot decompress %s: %s\n", pathname, message != NULL ? message : "");
+}
+#endif
+
+// convert unsigned decimal to non-negative size_t, produce error when conversion fails
+size_t strtonum(const char *string, const char *message)
+{
+  char *rest = NULL;
+  size_t size = static_cast<size_t>(strtoull(string, &rest, 10));
+  if (rest == NULL || *rest != '\0')
+    usage(message, string);
+  return size;
+}
+
+// convert unsigned decimal to positive size_t, produce error when conversion fails or when the value is zero
+size_t strtopos(const char *string, const char *message)
+{
+  size_t size = strtonum(string, message);
+  if (size == 0)
+    usage(message, string);
+  return size;
 }
 
 // parse the command-line options
@@ -343,6 +740,8 @@ void options(int argc, const char **argv)
               flag_verbose = true;
             else if (strcmp(arg, "version") == 0)
               version();
+            else if (strncmp(arg, "zmax=", 5) == 0)
+              flag_zmax = strtopos(arg + 5, "invalid argument --zmax=");
             else
               usage("invalid option --", arg);
 
@@ -418,39 +817,34 @@ void options(int argc, const char **argv)
     }
   }
 
+  // -c silently overrides -d and -f
   if (flag_check)
     flag_delete = flag_force = false;
 
-  if (flag_decompress)
-    usage("Option -z (--decompress) is not yet available in this version");
-}
+  // -d silently overrides -f
+  if (flag_delete)
+    flag_force = false;
 
-// open Unicode wide string UTF-8 encoded filename
-inline int fopenw_s(FILE **file, const char *filename, const char *mode)
-{
-  *file = NULL;
-#if defined(HAVE_F_RDAHEAD)
-  if (strchr(mode, 'a') == NULL && strchr(mode, 'w') == NULL)
-  {
-#if defined(O_NOCTTY)
-    int fd = open(filename, O_RDONLY | O_NOCTTY);
+#ifndef HAVE_LIBZ
+  if (flag_decompress)
+    usage("Option -z (--decompress) is not available");
+#endif
+
+#ifdef WITH_DECOMPRESSION_THREAD
+  // --zmax: NUM argument exceeds limit?
+  if (flag_zmax > 99)
+    usage("option --zmax argument exceeds upper limit");
 #else
-    int fd = open(filename, O_RDONLY);
+  if (flag_zmax > 1)
+    usage("Option --zmax is not available");
 #endif
-    if (fd < 0)
-      return errno;
-    fcntl(fd, F_RDAHEAD, 1);
-    return (*file = fdopen(fd, mode)) == NULL ? errno ? errno : (errno = EINVAL) : 0;
-  }
-#endif
-  return (*file = fopen(filename, mode)) == NULL ? errno ? errno : (errno = EINVAL) : 0;
 }
 
 // return true if s[0..n-1] contains a \0 (NUL) or a non-displayable invalid UTF-8 sequence
 bool is_binary(const char *s, size_t n)
 {
   // file is binary if it contains a \0 (NUL)
-  if (memchr(static_cast<const void*>(s), '\0', n) != NULL)
+  if (memchr(s, '\0', n) != NULL)
     return true;
 
   if (n == 1)
@@ -460,59 +854,111 @@ bool is_binary(const char *s, size_t n)
 
   while (s < e)
   {
-    do
-    {
-      if ((*s & 0xc0) == 0x80)
-        return true;
-    } while ((*s & 0xc0) != 0xc0 && ++s < e);
+    while (s < e && !(*s & 0x80))
+      ++s;
 
     if (s >= e)
       return false;
 
-    if (++s >= e || (*s & 0xc0) != 0x80)
+    unsigned char c = static_cast<unsigned char>(*s);
+    if (c < 0xc2 || c > 0xf4 || ++s >= e || (*s & 0xc0) != 0x80)
       return true;
 
     if (++s < e && (*s & 0xc0) == 0x80)
       if (++s < e && (*s & 0xc0) == 0x80)
-        if (++s < e && (*s & 0xc0) == 0x80)
-          ++s;
+        ++s;
   }
 
   return false;
 }
 
-// file indexing hash function
+// prime 61 file indexing hash function
 inline uint16_t indexhash(uint16_t h, uint8_t b)
 {
   return (h << 6) - h - h - h + b;
 }
 
-// index a file to produce hashes[0..size-1] table, noise and binary file detection flag
-bool index(const std::string& pathname, uint8_t *hashes, size_t& size, float& noise, bool& binary)
+// index a file to produce hashes[0..hashes_size-1] table, noise, and archive/binary file detection flags
+bool index(Stream& stream, const char *pathname, uint8_t *hashes, size_t& hashes_size, float& noise, bool& compressed, bool& archive, bool& binary, uint64_t& size)
 {
-  FILE *file = NULL;
-
-  if (fopenw_s(&file, pathname.c_str(), "r") != 0)
-    return false;
-
-  reflex::Input input(file);
-
-  size = 0;
+  hashes_size = 0;
   noise = 0;
+  size = 0;
+  binary = false;
+
+  // open next file when not currently indexing an archive, return false when failed
+  if (!archive)
+    if (!stream.open(pathname))
+      return false;
+
+#ifdef HAVE_LIBZ
+
+  stream.read_next_file(pathname, archive);
+
+#else
+
+  stream.input = stream.file;
+
+#endif
 
   char buffer[BUF_SIZE];
-  size_t buflen = input.get(buffer, BUF_SIZE);
+  size_t buflen = stream.input.get(buffer, sizeof(buffer));
+
+#ifdef HAVE_LIBZ
+
+  if (flag_decompress)
+  {
+    // now that we have some data, are we extracting it from an archive with parts?
+    if (!stream.partname.empty())
+    {
+      // found an archive, do not close the pipe until all parts were extracted
+      archive = true;
+
+#ifndef WITH_DECOMPRESSION_THREAD
+      // if extracting a directory part in an archive, then read it to skip it (decompression thread does this automatically)
+      if (stream.partname.back() == '/')
+      {
+        while (stream.input.get(buffer, sizeof(buffer)) != 0)
+          continue;
+        return true;
+      }
+#endif
+    }
+    else if (archive)
+    {
+      // archive extraction has ended, close the stream and return false
+      stream.close();
+      return archive = false;
+    }
+
+    // are we decompressing?
+    compressed = stream.decompressing();
+  }
+
+#endif
+
   if (buflen == 0)
   {
-    binary = false;
-    fclose(file);
+    if (!archive)
+      stream.close();
     return true;
   }
 
-  binary = is_binary(buffer, buflen);
+  // check if input is binary up to buflen bytes, but do not cut off right after the first UTF-8 byte
+  binary = is_binary(buffer, buflen - ((buffer[buflen - 1] & 0xc0) == 0xc0));
   if (binary && flag_ignore_binary)
   {
-    fclose(file);
+    // if extracting a binary archive part, then read it to skip it
+    if (archive)
+    {
+      while (stream.input.get(buffer, sizeof(buffer)) != 0)
+        continue;
+    }
+    else
+    {
+      stream.close();
+    }
+
     return true;
   }
 
@@ -520,9 +966,10 @@ bool index(const std::string& pathname, uint8_t *hashes, size_t& size, float& no
   size_t winlen = std::min(buflen, sizeof(window));
   char *bufptr = buffer + winlen;
   memcpy(static_cast<void*>(window), buffer, winlen);
+  size = buflen;
   buflen -= winlen;
-  size = 65536;
-  memset(hashes, 0xff, size);
+  hashes_size = 65536;
+  memset(hashes, 0xff, hashes_size);
 
   if (buflen > 0)
   {
@@ -560,9 +1007,10 @@ bool index(const std::string& pathname, uint8_t *hashes, size_t& size, float& no
       if (buflen == 0)
       {
         bufptr = buffer;
-        buflen = input.get(buffer, BUF_SIZE);
+        buflen = stream.input.get(buffer, sizeof(buffer));
         if (buflen == 0)
           break;
+        size += buflen;
       }
     }
   }
@@ -578,11 +1026,10 @@ bool index(const std::string& pathname, uint8_t *hashes, size_t& size, float& no
     }
   }
 
-  fclose(file);
+  if (!archive)
+    stream.close();
 
-  noise = 0;
-
-  for (size_t i = 0; i < size; ++i)
+  for (size_t i = 0; i < hashes_size; ++i)
   {
     noise += (hashes[i] & 0x01) == 0;
     noise += (hashes[i] & 0x02) == 0;
@@ -594,13 +1041,13 @@ bool index(const std::string& pathname, uint8_t *hashes, size_t& size, float& no
     noise += (hashes[i] & 0x80) == 0;
   }
 
-  noise /= 8 * size;
+  noise /= 8 * hashes_size;
 
   // compress the table in place until max noise is reached or exceeded
-  while (size > MIN_SIZE)
+  while (hashes_size > MIN_SIZE)
   {
     // compute noise of halved hashes table (zero bits are hits)
-    size_t half = size / 2;
+    size_t half = hashes_size / 2;
     float half_noise = 0;
 
     for (size_t i = 0; i < half; ++i)
@@ -625,28 +1072,12 @@ bool index(const std::string& pathname, uint8_t *hashes, size_t& size, float& no
     for (size_t i = 0; i < half; ++i)
       hashes[i] &= hashes[i + half];
 
-    size = half;
+    hashes_size = half;
     noise = half_noise;
   }
 
   return true;
 }
-
-#ifndef OS_WIN
-// get modification time (micro seconds) from stat
-uint64_t modified_time(const struct stat& buf)
-{
-#if defined(HAVE_STAT_ST_ATIM) && defined(HAVE_STAT_ST_MTIM) && defined(HAVE_STAT_ST_CTIM)
-  // tv_sec may be 64 bit, but value is small enough to multiply by 1000000 to fit in 64 bits
-  return static_cast<uint64_t>(static_cast<uint64_t>(buf.st_mtim.tv_sec) * 1000000 + buf.st_mtim.tv_nsec / 1000);
-#elif defined(HAVE_STAT_ST_ATIMESPEC) && defined(HAVE_STAT_ST_MTIMESPEC) && defined(HAVE_STAT_ST_CTIMESPEC)
-  // tv_sec may be 64 bit, but value is small enough to multiply by 1000000 to fit in 64 bits
-  return static_cast<uint64_t>(static_cast<uint64_t>(buf.st_mtimespec.tv_sec) * 1000000 + buf.st_mtimespec.tv_nsec / 1000);
-#else
-  return static_cast<uint64_t>(buf.st_mtime);
-#endif
-}
-#endif
 
 // trim white space from either end of the line
 void trim(std::string& line)
@@ -686,7 +1117,7 @@ inline bool getline(reflex::BufferedInput& input, std::string& line)
 }
 
 // read globs from a file and split them into files or dirs to include or exclude by pushing them onto the vectors
-void import_globs(FILE *file, std::vector<std::string>& files, std::vector<std::string>& dirs)
+void import_globs(FILE *file, StrVec& files, StrVec& dirs)
 {
   // read globs from the specified file or files
   reflex::BufferedInput input(file);
@@ -715,6 +1146,7 @@ void import_globs(FILE *file, std::vector<std::string>& files, std::vector<std::
         else
         {
           files.emplace_back(line);
+          dirs.emplace_back(line);
         }
       }
     }
@@ -771,13 +1203,36 @@ bool include_file(const char *pathname, const char *basename)
   return ok;
 }
 
-// catalog of directory contents
+// catalog directory contents
 void cat(const std::string& pathname, std::stack<Entry>& dir_entries, std::vector<Entry>& file_entries, uint64_t& num_dirs, uint64_t& num_links, uint64_t& num_other, int64_t& ign_dirs, int64_t& ign_files, uint64_t& index_time, uint64_t& last_time, bool dir_only = false)
 {
   // start populating file and link entries, append directory entries (not cleared)
   file_entries.clear();
   last_time = 0;
   index_time = 0;
+
+#ifdef OS_WIN
+
+  WIN32_FIND_DATAW ffd;
+
+  std::string glob;
+
+  if (pathname != ".")
+    glob.assign(pathname).append("/*");
+  else
+    glob.assign("*");
+
+  std::wstring wglob = utf8_decode(glob);
+  HANDLE hFind = FindFirstFileW(wglob.c_str(), &ffd);
+
+  if (hFind == INVALID_HANDLE_VALUE)
+  {
+    if (GetLastError() != ERROR_FILE_NOT_FOUND)
+      warning("cannot open directory", pathname.c_str());
+    return;
+  }
+
+#else
 
   DIR *dir = opendir(pathname.c_str());
 
@@ -786,6 +1241,8 @@ void cat(const std::string& pathname, std::stack<Entry>& dir_entries, std::vecto
     error("cannot open directory", pathname.c_str());
     return;
   }
+
+#endif
 
   // check for ignore files, read them and push globs on the ignore_stack
   if (!flag_ignore_files.empty() && !dir_only)
@@ -803,11 +1260,9 @@ void cat(const std::string& pathname, std::stack<Entry>& dir_entries, std::vecto
         // push globs imported from the ignore file to the back of the vectors
         ignore_stack.emplace();
 
-        // mark dir_entries stack with an empty pathname as a sentinel to pop the ignore_stack aferwards
+        // mark dir_entries stack with an empty pathname as a sentinel to pop the ignore_stack afterwards
         dir_entries.emplace("");
-
         import_globs(file, ignore_stack.top().files, ignore_stack.top().dirs);
-
         fclose(file);
       }
     }
@@ -815,11 +1270,85 @@ void cat(const std::string& pathname, std::stack<Entry>& dir_entries, std::vecto
 
   ++num_dirs;
   std::string entry_pathname;
+
+#ifdef OS_WIN
+
+  std::string cFileName;
+
+  do
+  {
+    cFileName.assign(utf8_encode(ffd.cFileName));
+
+    if (pathname.empty() || pathname == ".")
+      entry_pathname.assign(cFileName);
+    else if (pathname.back() == PATHSEPCHR)
+      entry_pathname.assign(pathname).append(cFileName);
+    else
+      entry_pathname.assign(pathname).append(PATHSEPSTR).append(cFileName);
+
+    DWORD attr = GetFileAttributesW(utf8_decode(entry_pathname).c_str());
+
+    if (attr == INVALID_FILE_ATTRIBUTES)
+    {
+      errno = ENOENT;
+      error("cannot read", entry_pathname.c_str());
+    }
+    else if ((attr & (FILE_ATTRIBUTE_DIRECTORY|FILE_ATTRIBUTE_DEVICE)) == 0 && cFileName == ugrep_index_filename)
+    {
+      // get index file modification time
+      index_time = modified_time(ffd);
+    }
+    else
+    {
+      // search directory entries that aren't hidden
+      if ((cFileName[0] != '.' && (attr & (FILE_ATTRIBUTE_HIDDEN|FILE_ATTRIBUTE_SYSTEM)) == 0) ||
+          (flag_hidden && cFileName[1] != '\0' && cFileName[1] != '.'))
+      {
+        if ((attr & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
+        {
+          /* TODO consider following symlink, but ugrep.exe doesn't do that yet either
+          if (flag_dereference_files && (attr & (FILE_ATTRIBUTE_DIRECTORY|FILE_ATTRIBUTE_DEVICE)) == 0 && !dir_only)
+          {
+          }
+          */
+        }
+        else if ((attr & FILE_ATTRIBUTE_DIRECTORY) != 0)
+        {
+          if (dir_only || include_dir(entry_pathname.c_str(), cFileName.c_str()))
+            dir_entries.emplace(entry_pathname, cFileName.size(), modified_time(ffd), file_size(ffd));
+          else
+            ++ign_dirs;
+        }
+        else if ((attr & FILE_ATTRIBUTE_DEVICE) == 0 && !dir_only)
+        {
+          if (include_file(entry_pathname.c_str(), cFileName.c_str()))
+          {
+            uint64_t file_time = modified_time(ffd);
+            last_time = std::max(last_time, file_time);
+            file_entries.emplace_back(entry_pathname, cFileName.size(), file_time, file_size(ffd));
+          }
+          else
+          {
+            ++ign_files;
+          }
+        }
+        else
+        {
+          ++num_other;
+        }
+      }
+    }
+  } while (FindNextFileW(hFind, &ffd) != 0);
+
+  FindClose(hFind);
+
+#else
+
   struct dirent *dirent = NULL;
 
   while ((dirent = readdir(dir)) != NULL)
   {
-    if (pathname.empty() || (pathname.size() == 1 && pathname[0] == '.'))
+    if (pathname.empty() || pathname == ".")
       entry_pathname.assign(dirent->d_name);
     else if (pathname.back() == PATHSEPCHR)
       entry_pathname.assign(pathname).append(dirent->d_name);
@@ -845,7 +1374,7 @@ void cat(const std::string& pathname, std::stack<Entry>& dir_entries, std::vecto
         if (S_ISDIR(buf.st_mode))
         {
           if (dir_only || include_dir(entry_pathname.c_str(), dirent->d_name))
-            dir_entries.emplace(entry_pathname, strlen(dirent->d_name), modified_time(buf), buf.st_size);
+            dir_entries.emplace(entry_pathname, strlen(dirent->d_name), modified_time(buf), file_size(buf));
           else
             ++ign_dirs;
         }
@@ -855,7 +1384,7 @@ void cat(const std::string& pathname, std::stack<Entry>& dir_entries, std::vecto
           {
             uint64_t file_time = modified_time(buf);
             last_time = std::max(last_time, file_time);
-            file_entries.emplace_back(entry_pathname, strlen(dirent->d_name), file_time, buf.st_size);
+            file_entries.emplace_back(entry_pathname, strlen(dirent->d_name), file_time, file_size(buf));
           }
           else
           {
@@ -870,7 +1399,7 @@ void cat(const std::string& pathname, std::stack<Entry>& dir_entries, std::vecto
             {
               uint64_t file_time = modified_time(buf);
               last_time = std::max(last_time, file_time);
-              file_entries.emplace_back(entry_pathname, strlen(dirent->d_name), file_time, buf.st_size);
+              file_entries.emplace_back(entry_pathname, strlen(dirent->d_name), file_time, file_size(buf));
             }
             else
             {
@@ -891,6 +1420,8 @@ void cat(const std::string& pathname, std::stack<Entry>& dir_entries, std::vecto
   }
 
   closedir(dir);
+
+#endif
 
   for (; !ignore_stack.empty() && !dir_entries.empty() && dir_entries.top().pathname.empty(); dir_entries.pop())
     ignore_stack.pop();
@@ -956,6 +1487,8 @@ void indexer(const char *pathname)
   int64_t ign_dirs = 0;
   int64_t ign_files = 0;
   int64_t bin_files = 0;
+  int64_t not_files = 0;
+  int64_t zip_files = 0;
   int64_t sum_hashes_size = 0;
   int64_t sum_files_size = 0;
   float sum_noise = 0;
@@ -993,7 +1526,7 @@ void indexer(const char *pathname)
           continue;
         }
 
-        if (fopenw_s(&index_file, index_filename.c_str(), "r+b") == 0)
+        if (fopenw_s(&index_file, index_filename.c_str(), flag_check ? "rb" : "r+b") == 0)
         {
           char check_magic[sizeof(ugrep_index_file_magic)];
 
@@ -1004,6 +1537,8 @@ void indexer(const char *pathname)
             char basename[65536];
             off_t inpos = sizeof(ugrep_index_file_magic);
             off_t outpos = sizeof(ugrep_index_file_magic);
+
+            std::vector<Entry>::iterator archive_entry = file_entries.end();
 
             while (true)
             {
@@ -1025,11 +1560,25 @@ void indexer(const char *pathname)
               if (fread(basename, 1, basename_size, index_file) < basename_size)
                 break;
 
+              // properly terminate
+              basename[basename_size] = '\0';
+
+              std::vector<Entry>::iterator entry = archive_entry;
+
+              // if not the same archive filename, then remove the postponed archive entry from the cat file entries
+              if (entry != file_entries.end() &&
+                  (entry->basename_size() != basename_size ||
+                   strncmp(entry->basename(), basename, basename_size) != 0))
+              {
+                file_entries.erase(entry);
+                entry = archive_entry = file_entries.end();
+              }
+
               // search the directory contents to find the indexed file
-              std::vector<Entry>::iterator entry = file_entries.begin();
-              for (; entry != file_entries.end(); ++entry)
-                if (entry->basename_size() == basename_size && strncmp(entry->basename(), basename, basename_size) == 0)
-                  break;
+              if (entry == file_entries.end())
+                for (entry = file_entries.begin(); entry != file_entries.end(); ++entry)
+                  if (entry->basename_size() == basename_size && strncmp(entry->basename(), basename, basename_size) == 0)
+                    break;
 
               // if file is present in the directory and not updated, then preserve entry in the index
               if (entry != file_entries.end() && entry->mtime <= index_time)
@@ -1038,11 +1587,12 @@ void indexer(const char *pathname)
 
                 // binary files registered but not indexed
                 bool binary = (header[1] & 0x80) != 0;
-                bin_files += binary && hashes_size == 0;
+                bin_files += binary;
+                not_files += binary && hashes_size == 0;
 
                 if (inpos > outpos)
                 {
-                  // move header, basename, and hashes to the front of the index file
+                  // move header, basename, and hashes to the front of the index file (only happens when not just checking)
                   if (fread(hashes, 1, hashes_size, index_file) < hashes_size ||
                       fseeko(index_file, outpos, SEEK_SET) != 0 ||
                       fwrite(header, sizeof(header), 1, index_file) == 0 ||
@@ -1054,9 +1604,18 @@ void indexer(const char *pathname)
                   }
                 }
 
-                // remove file from the cat file entries unless multi-part archive for we do not compute new hashes
-                if ((header[1] & 0x40) == 0 || (header[1] & 0x20) != 0)
+                // remove file entry from the cat file entries unless multi-part archive
+                bool archive = (header[1] & 0x40) != 0;
+                if (archive)
+                {
+                  // postpone removing this archive entry
+                  archive_entry = entry;
+                }
+                else
+                {
                   file_entries.erase(entry);
+                  archive_entry = file_entries.end();
+                }
 
                 outpos += sizeof(header) + basename_size + hashes_size;
               }
@@ -1070,12 +1629,16 @@ void indexer(const char *pathname)
                 }
                 else
                 {
+                  if (flag_verbose)
+                    printf("-           -  -%% %s\n", basename);
+
                   sum_hashes_size -= sizeof(header) + basename_size + hashes_size;
                 }
               }
               else
               {
                 ++mod_files;
+                --add_files;
 
                 if (flag_check)
                 {
@@ -1083,7 +1646,6 @@ void indexer(const char *pathname)
                 }
                 else
                 {
-                  --add_files;
                   sum_hashes_size -= sizeof(header) + basename_size + hashes_size;
                 }
               }
@@ -1091,7 +1653,13 @@ void indexer(const char *pathname)
               inpos += sizeof(header) + basename_size + hashes_size;
             }
 
-            if (fseeko(index_file, outpos, SEEK_SET) != 0 || ftruncate(fileno(index_file), outpos) != 0)
+            // make sure to remove postponed archive file entry
+            if (archive_entry != file_entries.end())
+              file_entries.erase(archive_entry);
+
+            if (inpos > outpos &&
+                (fseeko(index_file, outpos, SEEK_SET) != 0 ||
+                 ftruncate(fileno(index_file), outpos) != 0))
               error("cannot update index file in", visit.pathname.c_str());
           }
           else
@@ -1113,73 +1681,99 @@ void indexer(const char *pathname)
       }
     }
 
+    // create a new index file when none is present
     if (index_file == NULL && !flag_check)
     {
-      index_file = fopen(index_filename.c_str(), "wb");
-      if (index_file == NULL || fwrite(ugrep_index_file_magic, sizeof(ugrep_index_file_magic), 1, index_file) == 0)
+      if (fopenw_s(&index_file, index_filename.c_str(), "wb") != 0 ||
+          fwrite(ugrep_index_file_magic, sizeof(ugrep_index_file_magic), 1, index_file) == 0)
+      {
         error("cannot create index file in", visit.pathname.c_str());
+        if (index_file != NULL)
+          fclose(index_file);
+        index_file = NULL;
+      }
     }
 
     if (index_file != NULL && !flag_check)
     {
-      num_files += file_entries.size();
+      Stream stream;
 
-      for (const auto& file : file_entries)
+      for (const auto& entry : file_entries)
       {
         size_t hashes_size = 0;
         float noise = 0;
         bool binary = false;
 
-        // TODO if the file is a compressed file or an archive, then index compressed content for each part
+        // if the file is a a zip archive, then index archived content for each part
+        bool archive = false;
         bool compressed = false;
-        bool final_part = false;
+        uint64_t size = entry.size;
+        const char *pathname = entry.pathname.c_str();
 
-        if (file.size == 0 || index(file.pathname, hashes, hashes_size, noise, binary))
+        if (size == 0 || index(stream, pathname, hashes, hashes_size, noise, compressed, archive, binary, size))
         {
-          // log2 of the hashes table size, zero to skip empty files and binary files when -I is specified
-          uint8_t logsize = 0;
-          for (size_t k = hashes_size; k > 1; k >>= 1)
-            ++logsize;
-
-          // binary files registered but not indexed
-          bin_files += binary && hashes_size == 0;
-
-          if (!binary || !flag_ignore_binary)
+          do
           {
             if (flag_verbose)
-              printf("%c%12" PRId64 "%3u%% %s\n", compressed ? 'A' : binary ? 'B' : ' ', file.size, static_cast<unsigned>(100.0 * noise + 0.5), file.pathname.c_str());
+            {
+              int classification = ' ';
+              if (compressed)
+                classification = 'C';
+              if (archive)
+                classification = 'A';
+              if (binary)
+                classification = size == 0 ? 'I' : 'B';
+              if (archive)
+                printf("%c%12" PRIu64 "%3u%% %s{%s}\n", classification, size, static_cast<unsigned>(100.0 * noise + 0.5), pathname, stream.partname.c_str());
+              else
+                printf("%c%12" PRIu64 "%3u%% %s\n", classification, size, static_cast<unsigned>(100.0 * noise + 0.5), pathname);
+            }
 
-            sum_files_size += file.size;
-            sum_noise += noise;
-          }
+            // binary files registered but not indexed
+            bin_files += binary;
+            not_files += binary && hashes_size == 0;
 
-          // mark high bits
-          logsize |= (binary << 7) | (compressed << 6) | (final_part << 5);
+            if (!archive || size > 0)
+            {
+              // log2 of the hashes table size, zero to skip empty files and binary files when -I is specified
+              uint8_t logsize = 0;
+              for (size_t k = hashes_size; k > 1; k >>= 1)
+                ++logsize;
 
-          const char *basename = file.basename();
-          uint16_t basename_size = std::min(file.basename_size(), static_cast<size_t>(65535));
-          uint8_t header[4] = {
-            static_cast<uint8_t>(flag_accuracy + '0'),
-            logsize,
-            static_cast<uint8_t>(basename_size),
-            static_cast<uint8_t>(basename_size >> 8)
-          };
+              // mark high bits
+              logsize |= (binary << 7) | (archive << 6) | (compressed << 5);
 
-          // write header with basename, log of the hashes size and hashes
-          if (fwrite(header, sizeof(header), 1, index_file) == 0 ||
-              fwrite(basename, 1, basename_size, index_file) < basename_size ||
-              fwrite(hashes, 1, hashes_size, index_file) < hashes_size)
-          {
-            error("cannot write index file in", visit.pathname.c_str());
-            break;
-          }
+              const char *basename = entry.basename();
+              uint16_t basename_size = static_cast<uint16_t>(std::min(entry.basename_size(), static_cast<size_t>(65535)));
+              uint8_t header[4] = {
+                static_cast<uint8_t>(flag_accuracy + '0'),
+                logsize,
+                static_cast<uint8_t>(basename_size),
+                static_cast<uint8_t>(basename_size >> 8)
+              };
 
-          ++add_files;
-          sum_hashes_size += sizeof(header) + basename_size + hashes_size;
+              // write header with basename, log of the hashes size and hashes
+              if (fwrite(header, sizeof(header), 1, index_file) == 0 ||
+                  fwrite(basename, 1, basename_size, index_file) < basename_size ||
+                  fwrite(hashes, 1, hashes_size, index_file) < hashes_size)
+              {
+                error("cannot write index file in", visit.pathname.c_str());
+                if (!archive)
+                  break;
+              }
+
+              zip_files += archive;
+              ++num_files;
+              ++add_files;
+              sum_files_size += size;
+              sum_noise += noise;
+              sum_hashes_size += sizeof(header) + basename_size + hashes_size;
+            }
+          } while (archive && index(stream, pathname, hashes, hashes_size, noise, compressed, archive, binary, size));
         }
         else
         {
-          printf("cannot index %s\n", file.pathname.c_str());
+          printf("cannot index %s\n", pathname);
         }
       }
     }
@@ -1202,7 +1796,7 @@ void indexer(const char *pathname)
 
   if (flag_check)
   {
-    printf("\n%13" PRIu64 " files indexed in %" PRIu64 " directories\n%13" PRId64 " directories not indexed\n%13" PRId64 " new files not indexed\n%13" PRId64 " modified files not indexed\n%13" PRId64 " deleted files are still indexed\n%13" PRId64 " binary files skipped with --ignore-binary\n", num_files, num_dirs, add_dirs, add_files, mod_files, del_files - ign_files, bin_files);
+    printf("\n%13" PRIu64 " files indexed in %" PRIu64 " directories\n%13" PRId64 " directories not indexed\n%13" PRId64 " new files not indexed\n%13" PRId64 " modified files not indexed\n%13" PRId64 " deleted files are needlessly indexed\n%13" PRId64 " binary files indexed\n%13" PRId64 " binary files ignored with --ignore-binary\n", num_files, num_dirs, add_dirs, add_files, mod_files, del_files - ign_files, bin_files - not_files, not_files);
     if (!flag_ignore_files.empty())
       printf("%13" PRIu64 " directories ignored with --ignore-files\n%13" PRIu64 " files ignored with --ignore-files\n", ign_dirs, ign_files);
     printf("%13" PRIu64 " symbolic links skipped\n%13" PRIu64 " devices skipped\n\n", num_links, num_other);
@@ -1224,7 +1818,10 @@ void indexer(const char *pathname)
   {
     if (!flag_quiet)
     {
-      printf("\n%13" PRIu64 " files indexed in %" PRIu64 " directories\n%13" PRId64 " new directories indexed\n%13" PRId64 " new files indexed\n%13" PRId64 " modified files indexed\n%13" PRId64 " deleted files removed from indexes\n%13" PRId64 " binary files skipped with --ignore-binary\n", num_files, num_dirs, add_dirs, add_files, mod_files, del_files, bin_files);
+      if (flag_decompress && zip_files > 0)
+        printf("\n%13" PRIu64 " files indexed in %" PRIu64 " directories\n%13" PRId64 " new directories indexed\n%13" PRId64 " new files indexed (%" PRIu64 " in archives)\n%13" PRId64 " modified files indexed\n%13" PRId64 " deleted files removed from indexes\n%13" PRId64 " binary files indexed\n%13" PRId64 " binary files ignored with --ignore-binary\n", num_files, num_dirs, add_dirs, add_files, zip_files, mod_files, del_files, bin_files - not_files, not_files);
+      else
+        printf("\n%13" PRIu64 " files indexed in %" PRIu64 " directories\n%13" PRId64 " new directories indexed\n%13" PRId64 " new files indexed\n%13" PRId64 " modified files indexed\n%13" PRId64 " deleted files removed from indexes\n%13" PRId64 " binary files indexed\n%13" PRId64 " binary files ignored with --ignore-binary\n", num_files, num_dirs, add_dirs, add_files, mod_files, del_files, bin_files - not_files, not_files);
       if (!flag_ignore_files.empty())
         printf("%13" PRIu64 " directories ignored with --ignore-files\n%13" PRIu64 " files ignored with --ignore-files\n", ign_dirs, ign_files);
       if (sum_hashes_size > 0)
@@ -1238,6 +1835,11 @@ void indexer(const char *pathname)
 
 int main(int argc, const char **argv)
 {
+#if !defined(OS_WIN) && defined(HAVE_LIBZ) && defined(WITH_DECOMPRESSION_THREAD)
+  // ignore SIGPIPE, should never happen, but just in case
+  signal(SIGPIPE, SIG_IGN);
+#endif
+
   options(argc, argv);
 
   if (flag_delete)
