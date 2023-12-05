@@ -15,27 +15,43 @@ mkdir -p man
 echo '.TH UGREP-INDEXER "1" "'`date '+%B %d, %Y'`'" "ugrep-indexer '$1'" "User Commands"' > man/ugrep-indexer.1
 cat >> man/ugrep-indexer.1 << 'END'
 .SH NAME
-\fBugrep-indexer\fR -- file indexer for accelerated ugrep search
+\fBugrep-indexer\fR -- file indexer to accelerate recursive searching
 .SH SYNOPSIS
-.B ugrep-indexer [\fB-0\fR|...|\fB-9\fR] [\fB-.\fR] [\fB-c\fR|\fB-d\fR|\fB-f\fR] [\fB-I\fR] [\fB-q\fR] [\fB-S\fR] [\fB-s\fR] [\fB-X\fR] [\fB-z\fR]
+.B ugrep-indexer [\fIPATH\fR] [\fB-0\fR...\fB9\fR] [\fB-c\fR|\fB-d\fR|\fB-f\fR] [\fB-I\fR] [\fB-q\fR] [\fB-S\fR] [\fB-s\fR] [\fB-X\fR] [\fB-z\fR]
 .SH DESCRIPTION
 The \fBugrep-indexer\fR utility recursively indexes files to accelerate ugrep
 recursive searches with \fBugrep\fR option \fB--index\fR.
 .PP
+An optional \fIPATH\fR may be specified to the root of the directory tree to
+index.  The default is to recursively index the working directory tree.
+.PP
+Indexes are incrementally updated unless option \fB-f\fR or \fB--force\fR is
+specified.
+.PP
+When option \fB-I\fR or \fB--ignore-binary\fR is specified, binary files are
+ignored and not indexed.  Searching with `ugrep --index' still searches binary
+files unless ugrep option \fB-I\fR or \fB--ignore-binary\fR is specified also.
+.PP
+Archives and compressed files are incrementally indexed only when option
+\fB-z\fR or \fB--decompress\fR is specified.  Otherwise, archives and
+compressed files are indexed as binary files, or are ignored with option
+\fB-I\fR or \fB--ignore-binary\fR.
+.PP
+To create an indexing log file, specify option \fB-v\fR or \fB--verbose\fR and
+redirect standard output to a log file.  All messages are sent to standard
+output.
+.PP
 The following options are available:
 END
 src/ugrep-indexer --help \
-| tail -n+2 \
+| tail -n+24 \
 | sed -e 's/\([^\\]\)\\/\1\\\\/g' \
 | sed \
   -e '/^$/ d' \
   -e '/^    Long options may start/ d' \
   -e '/^    The ugrep-indexer/ d' \
-  -e '/^    0       / d' \
-  -e '/^    1       / d' \
-  -e '/^    >1      / d' \
-  -e '/^    If -q or --quiet or --silent/ d' \
-  -e '/^    status is 0 even/ d' \
+  -e '/^    0      / d' \
+  -e '/^    1      / d' \
   -e 's/^ \{5,\}//' \
   -e 's/^\.\([A-Za-z]\)/\\\&.\1/g' \
   -e $'s/^    \(.*\)$/.TP\\\n\\1/' \
@@ -56,7 +72,7 @@ The \fBugrep-indexer\fR utility exits with one of the following values:
 .IP 0
 Indexes are up to date.
 .IP 1
-Indexing check with option \fB-c\fR detected missing and outdated index files.
+Indexing check \fB-c\fR detected missing and outdated index files.
 .SH EXAMPLES
 Recursively and incrementally index all non-binary files showing progress:
 .IP

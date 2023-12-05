@@ -523,6 +523,21 @@ void version()
 void help()
 {
   std::cout << "\nUsage:\n\nugrep-indexer [-0|...|-9] [-.] [-c|-d|-f] [-I] [-q] [-S] [-s] [-X] [-z] [PATH]\n\n\
+    Updates indexes incrementally unless option -f or --force is specified.\n\
+    \n\
+    When option -I or --ignore-binary is specified, binary files are ignored\n\
+    and not indexed.  Searching with ugrep --index still searches binary files\n\
+    unless ugrep option -I or --ignore-binary is specified also.\n\
+    \n\
+    Archives and compressed files are incrementally indexed only when option -z\n\
+    or --decompress is specified.  Otherwise, archives and compressed files are\n\
+    indexed as binary files, or are ignored with option -I or --ignore-binary.\n\
+    \n\
+    To create an indexing log file, specify option -v or --verbose and redirect\n\
+    standard output to a log file.  All messages are sent to standard output.\n\
+    \n\
+    The following options are available:\n\
+    \n\
     PATH    Optional pathname to the root of the directory tree to index.  The\n\
             default is to recursively index the working directory tree.\n\n\
     -0, -1, -2, -3, ..., -9, --accuracy=DIGIT\n\
@@ -612,24 +627,11 @@ void help()
             "\
             This option is not available in this build configuration of ugrep.\n"
 #endif
-            "\n\
-    Indexes are incrementally updated unless option -f or --force is specified.\n\
-    \n\
-    When option -I or --ignore-binary is specified, binary files are ignored\n\
-    and not indexed.  Searching with ugrep --index still searches binary files\n\
-    unless ugrep option -I or --ignore-binary is specified also.\n\
-    \n\
-    Archives and compressed files are incrementally indexed only when option -z\n\
-    or --decompress is specified.  Otherwise, archives and compressed files are\n\
-    indexed as binary files, or are ignored with option -I or --ignore-binary.\n\
-    \n\
-    To create an indexing log file, specify option -v or --verbose and redirect\n\
-    standard output to a log file.  All messages are sent to standard output.\n\
-    \n\
+"\n\
     The ugrep-indexer utility exits with one of the following values:\n\
-    0       Indexes are up to date.\n\
-    1       Some indexes appear to be stale and are outdated or missing.\n\
-    \n";
+    0      Indexes are up to date.\n\
+    1      Indexing check -c detected missing and outdated index files.\n\
+\n";
 
   exit(EXIT_SUCCESS);
 }
