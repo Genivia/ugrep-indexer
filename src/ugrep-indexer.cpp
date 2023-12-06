@@ -34,7 +34,7 @@
 @copyright (c) BSD-3 License - see LICENSE.txt
 */
 
-#define UGREP_INDEXER_VERSION "0.9.2 beta"
+#define UGREP_INDEXER_VERSION "0.9.3 beta"
 
 // use a task-parallel thread to decompress the stream into a pipe to search, also handles nested archives
 #define WITH_DECOMPRESSION_THREAD
@@ -216,6 +216,10 @@ inline uint64_t file_size(const struct stat& buf)
 
 #include "input.h"
 #include "glob.hpp"
+#include <cstdio>
+#include <cstdlib>
+#include <cstdint>
+#include <cstring>
 #include <cinttypes>
 #include <iostream>
 #include <algorithm>
