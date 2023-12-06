@@ -65,6 +65,7 @@
 #include <direct.h>
 #include <errno.h>
 #include <time.h>
+#include <cstdint>
 #include <string>
 
 #define off_t int64_t
@@ -152,6 +153,7 @@ inline uint64_t file_size(const WIN32_FIND_DATAW& ffd)
 #include <cerrno>
 #include <cstdlib>
 #include <cstdio>
+#include <cstdint>
 #include <cstring>
 #include <ctime>
 #include <string>
@@ -216,10 +218,6 @@ inline uint64_t file_size(const struct stat& buf)
 
 #include "input.h"
 #include "glob.hpp"
-#include <cstdio>
-#include <cstdlib>
-#include <cstdint>
-#include <cstring>
 #include <cinttypes>
 #include <iostream>
 #include <algorithm>
