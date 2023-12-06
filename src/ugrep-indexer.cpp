@@ -349,6 +349,7 @@ struct Stream {
   {
     if (file != NULL)
       fclose(file);
+    file = NULL;
     input.clear();
   }
 
