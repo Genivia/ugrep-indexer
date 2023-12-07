@@ -98,12 +98,12 @@ $ ugrep-indexer -f -z -I -v -S -X
 Same, but decrease index file storage to a minimum by decreasing indexing
 accuracy from 5 (default) to 0:
 .IP
-$ ugrep-indexer -f -0 -z -I -v -X
+$ ugrep-indexer -f -0 -z -I -v -S -X
 .PP
 Increase search performance by increasing the indexing accuracy from 5
 (default) to 7 at a cost of larger index files:
 .IP
-$ ugrep-indexer -f7zIvX
+$ ugrep-indexer -f7zIvSX
 .PP
 Recursively delete all hidden ._UG#_Store index files to restore the directory
 tree to non-indexed:

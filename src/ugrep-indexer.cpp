@@ -34,7 +34,7 @@
 @copyright (c) BSD-3 License - see LICENSE.txt
 */
 
-#define UGREP_INDEXER_VERSION "0.9.3 beta"
+#define UGREP_INDEXER_VERSION "0.9.4 beta"
 
 // use a task-parallel thread to decompress the stream into a pipe to search, also handles nested archives
 #define WITH_DECOMPRESSION_THREAD
@@ -227,6 +227,9 @@ inline uint64_t file_size(const struct stat& buf)
 
 // number of bytes to gulp into the buffer to index a file
 #define BUF_SIZE 65536
+
+// fixed window size
+#define WIN_SIZE static_cast<size_t>(8)
 
 // smallest possible power-of-two size of an index of a file, shoud be > 61
 #define MIN_SIZE 128
@@ -928,8 +931,8 @@ bool index(Stream& stream, const char *pathname, uint8_t *hashes, size_t& hashes
 
 #endif
 
-  char buffer[BUF_SIZE];
-  size_t buflen = stream.input.get(buffer, sizeof(buffer));
+  char buffer[BUF_SIZE + WIN_SIZE]; // reserve WIN_SIZE (8) bytes padding for the window[] shifts
+  size_t buflen = stream.input.get(buffer, BUF_SIZE);
 
 #ifdef HAVE_LIBZ
 
@@ -945,7 +948,7 @@ bool index(Stream& stream, const char *pathname, uint8_t *hashes, size_t& hashes
       // if extracting a directory part in an archive, then read it to skip it (decompression thread does this automatically)
       if (stream.partname.back() == '/')
       {
-        while (stream.input.get(buffer, sizeof(buffer)) != 0)
+        while (stream.input.get(buffer, BUF_SIZE) != 0)
           continue;
         return true;
       }
@@ -978,7 +981,7 @@ bool index(Stream& stream, const char *pathname, uint8_t *hashes, size_t& hashes
     // if extracting a binary archive part, then read it to skip it
     if (archive)
     {
-      while (stream.input.get(buffer, sizeof(buffer)) != 0)
+      while (stream.input.get(buffer, BUF_SIZE) != 0)
         continue;
     }
     else
@@ -989,10 +992,8 @@ bool index(Stream& stream, const char *pathname, uint8_t *hashes, size_t& hashes
     return true;
   }
 
-  uint8_t window[8];
-  size_t winlen = std::min(buflen, sizeof(window));
-  char *bufptr = buffer + winlen;
-  memcpy(static_cast<void*>(window), buffer, winlen);
+  const uint8_t *window = reinterpret_cast<uint8_t*>(buffer);
+  size_t winlen = std::min(buflen, WIN_SIZE);
   size = buflen;
   buflen -= winlen;
   hashes_size = 65536;
@@ -1002,6 +1003,7 @@ bool index(Stream& stream, const char *pathname, uint8_t *hashes, size_t& hashes
   {
     while (true)
     {
+      // compute 8 staggered Bloom filters, hashing 1-grams to 8-grams
       uint16_t h = window[0];
       hashes[h] &= ~0x01;
       h = indexhash(h, window[1]);
@@ -1019,22 +1021,17 @@ bool index(Stream& stream, const char *pathname, uint8_t *hashes, size_t& hashes
       h = indexhash(h, window[7]);
       hashes[h] &= ~0x80;
 
-      // shift window and append next character from the stream
-      window[0] = window[1];
-      window[1] = window[2];
-      window[2] = window[3];
-      window[3] = window[4];
-      window[4] = window[5];
-      window[5] = window[6];
-      window[6] = window[7];
-      window[7] = *bufptr++;
+      // shift window
+      ++window;
       --buflen;
 
       // refill buffer[] when empty
       if (buflen == 0)
       {
-        bufptr = buffer;
-        buflen = stream.input.get(buffer, sizeof(buffer));
+        // move the remainder of the last window to the front of the buffer[] and append
+        memmove(buffer, window, WIN_SIZE);
+        buflen = stream.input.get(buffer + WIN_SIZE, BUF_SIZE);
+        window = reinterpret_cast<uint8_t*>(buffer);
         if (buflen == 0)
           break;
         size += buflen;

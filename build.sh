@@ -52,6 +52,6 @@ ls -l bin/ugrep-indexer
 echo
 echo "Copy bin/ugrep-indexer to a bin/ on your PATH"
 echo
-echo "Or install the ugrep-indxer utility on your system by executing:"
+echo "Or install the ugrep-indexer utility on your system by executing:"
 echo "sudo make install"
 echo
