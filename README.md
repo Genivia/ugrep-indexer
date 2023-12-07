@@ -21,17 +21,17 @@ It only searches those files that may match a specified regex pattern by using
 an index of the file.  This index allows for a quick check if there is a
 potential match, thus we avoid searching all files.
 
-Indexed-based search should be safe and not skip updated files that may now
-match.  If any files and directories were changed after indexing, then
+Indexed-based search should be safe and never skip updated files that may now
+match.  If any files and directories are added or changed after indexing, then
 searching will always search these additions and changes made to the file
-system by comparing file and directory time stamps.
+system by comparing file and directory time stamps to the indexing time stamp.
 
 If many files were added or changed, then we might want to re-index to bring
 the indexing up to date.  Re-indexing is incremental, so it will not take as
 much time as the initial indexing process.
 
-A typical but small example of an index-based search, e.g. on the ugrep v3.12.6
-repository placed on a separate drive:
+A typical but small example of an index-based search, for example on the ugrep
+v3.12.6 repository placed on a separate drive:
 
     $ cd drive/ugrep
     $ ugrep-indexer -I
@@ -195,12 +195,12 @@ index files and directories matching the globs in .gitignore:
 Same, but decrease index file storage to a minimum by decreasing indexing
 accuracy from 5 (default) to 0:
 
-    ugrep-indexer -f -0 -z -I -v -X
+    ugrep-indexer -f -0 -z -I -v -S -X
 
 Increase search performance by increasing the indexing accuracy from 5
 (default) to 7 at a cost of larger index files:
 
-    ugrep-indexer -f7zIvX
+    ugrep-indexer -f7zIvSX
 
 Recursively delete all hidden `._UG#_Store` index files to restore the
 directory tree to non-indexed:
