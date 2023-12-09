@@ -251,7 +251,7 @@ Future enhancements
 Q&A
 ---
 
-### Q: How does it work?
+### How does it work?
 
 Indexing adds a hidden index file `._UG#_Store` to each directory indexed.
 Files indexed are scanned (never changed!) by ugrep-indexer to generate index
@@ -389,7 +389,7 @@ in an indexed file, whereas a standard Bloom filter might have a false positive
 match.  Furthermore, the bit addressing used to index the hashes table enables
 efficient table compression.
 
-### Q: What is indexing accuracy?
+### What is indexing accuracy?
 
 Indexing is a form of lossy compression.  The higher the indexing accuracy, the
 faster ugrep search performance should be by skipping more files that do not
@@ -407,27 +407,12 @@ many files are not skipped from searching due to indexing noise (i.e. false
 positives), then a higher accuracy helps to increase the effectiveness of
 indexing, which may speed up searching.
 
-### Q: Why is the start-up time of ugrep higher with option --index?
+### What about UTF-16 and UTF-32 files?
 
-The start-up overhead of `ugrep --index` to construct indexing hash tables
-depends on the regex patterns.  If a regex pattern is very "permissive", i.e.
-matches a lot of possible patterns, then the start-up time of `ugrep --index`
-significantly increases to compute hash tables.  This may happen when large
-Unicode character classes and wildcards are used, especially with the unlimited
-`*` and `+` repeats.  To find out how the start-up time increases, use option
-`ugrep --index -r PATTERN /dev/null --stats=vm` to search /dev/null with your
-PATTERN.
+UTF-16 and UTF-32 are indexed too.  The indexer treats them as UTF-8 after
+internally converting them to UTF-8 to index.
 
-### Q: Why are index files not compressed?
-
-Index files should be very dense in information content and that is the case
-with this new indexing algorithm for ugrep that I designed and implemented.
-The denser an index file is, the more compact it accurately represents the
-original file data.  That makes it hard or impossible to compress index files.
-This is also a good indicator of how effective an index file will be in
-practice.
-
-### Q: Why index archives and compressed files?
+### Why bother indexing archives and compressed files?
 
 Archiving (zip/tar/pax/cpio) and compressing files saves disk space.  On the
 other hand, searching archives and compressed files is slower than searching
@@ -438,3 +423,23 @@ does not match.  On the other hand, disk store requirements will increase with
 the addition of index file entries for archives and compressed files.  Note
 that when archives and compressed files contain binaries, option `-I` ignores
 these archived/compressed binaries.
+
+### Why is the start-up time of ugrep higher with option --index?
+
+The start-up overhead of `ugrep --index` to construct indexing hash tables
+depends on the regex patterns.  If a regex pattern is very "permissive", i.e.
+matches a lot of possible patterns, then the start-up time of `ugrep --index`
+significantly increases to compute hash tables.  This may happen when large
+Unicode character classes and wildcards are used, especially with the unlimited
+`*` and `+` repeats.  To find out how the start-up time increases, use option
+`ugrep --index -r PATTERN /dev/null --stats=vm` to search /dev/null with your
+PATTERN.
+
+### Why are index files not compressed?
+
+Index files should be very dense in information content and that is the case
+with this new indexing algorithm for ugrep that I designed and implemented.
+The denser an index file is, the more compact it accurately represents the
+original file data.  That makes it hard or impossible to compress index files.
+This is also a good indicator of how effective an index file will be in
+practice.
