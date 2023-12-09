@@ -9,7 +9,7 @@ grepping.
 *Note: this is a 0.9 beta version of a new generation of "monotonic indexers".
 This release is subject to change and improvements based on experiments and
 user feedback.  Regardless, this implementation has been extensively tested for
-correctness.  Additional features and performance improvements are planned.*
+correctness.*
 
 [ugrep](https://github.com/Genivia/ugrep) is a grep-compatible ultra fast file
 searcher that supports index-based searching as of v3.12.5.
