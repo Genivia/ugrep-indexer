@@ -409,8 +409,8 @@ indexing, which may speed up searching.
 
 ### What about UTF-16 and UTF-32 files?
 
-UTF-16 and UTF-32 are indexed too.  The indexer treats them as UTF-8 after
-internally converting them to UTF-8 to index.
+UTF-16 and UTF-32 files are indexed too.  The indexer treats them as UTF-8
+after internally converting them.
 
 ### Why bother indexing archives and compressed files?
 
