@@ -226,9 +226,9 @@ Future enhancements
   on a fast file system.  Otherwise, do not expect much improvement or even
   possible slow down, since a single index file cannot be searched concurrently
   and more index entries will be checked when in fact directories are skipped
-  (skipping their indexes too).  Experiments will tell.  A critical caveat of
+  (skipping their indexes too).  Experiments will tell.  *A critical caveat of
   this approach is that index-based search with `ugrep --index` is no longer
-  "safe": new and modified files that are not indexed yet will not be searched.
+  safe: new and modified files that are not indexed yet will not be searched.*
 
 - Indexing tiny files might not be effective to speed up grepping.  This needs
   further investigation.  The indexer could skip such tiny files for example.
@@ -238,15 +238,15 @@ Future enhancements
   This ensures that we never have any false positives with characters being
   matched that are not part of the pattern.  However, the 1-gram (single
   character) bit space is small (at most 256 bits).  Therefore, we waste some
-  bits in larger hash tables.  A possible approach to reduce waste is to
+  bits when hash tables are larger.  A possible approach to reduce waste is to
   combine 1-grams with 2-grams to share the same bit space.  This is easy to do
   if we consider a 1-gram being equal to a 2-gram with the second character set
   to `\0` (NUL).  We can lower the false positive rate with a second 2-gram
   hash based on a different hash method.  Or we can expand the "bit tiers" from
-  8 to 9 to store 9-grams.  This will increase the indexing accuracy for longer
-  patterns (9 or longer) at no additional cost.  On the other hand, with this
-  change there will be more false positives with characters being matched that
-  are not part of the pattern when hash tables are small.
+  8 to 9 to store 9-grams.  That will increase the indexing accuracy for longer
+  patterns (9 or longer) at no additional cost.  On the other hand, that change
+  may cause more false positives when characters are being matched that are not
+  part of the pattern; we lose the advantage of a perfect 1-gram accuracy.
 
 Q&A
 ---
@@ -410,19 +410,18 @@ indexing, which may speed up searching.
 ### Q: What about UTF-16 and UTF-32 files?
 
 UTF-16 and UTF-32 files are indexed too.  The indexer treats them as UTF-8
-after internally converting them.
+after internally converting them to UTF-8 to index.
 
 ### Q: Why bother indexing archives and compressed files?
 
-Archiving (zip/tar/pax/cpio) and compressing files saves disk space.  On the
-other hand, searching archives and compressed files is slower than searching
-regular files.  Indexing archives and compressed files with `ugrep-indexer -z
--I` and searching them with `ugrep -z -I --index PATTERN` can speed up
-searching when the archives and compressed files are skipped when the pattern
-does not match.  On the other hand, disk store requirements will increase with
-the addition of index file entries for archives and compressed files.  Note
-that when archives and compressed files contain binaries, option `-I` ignores
-these archived/compressed binaries.
+Disk space is saved by archiving (zip/tar/pax/cpio) and compressing files.  On
+the other hand, searching archives and compressed files is much slower than
+searching regular files.  Indexing archives and compressed files with
+`ugrep-indexer -z -I` and searching them with `ugrep -z -I --index PATTERN`
+speeds up searching, i.e. when archives and compressed files are skipped.  On
+the other hand, disk store requirements will increase with the addition of
+index file entries for archives and compressed files.  Note that when archives
+and compressed files contain binaries, option `-I` ignores these binaries.
 
 ### Q: Why is the start-up time of ugrep higher with option --index?
 
