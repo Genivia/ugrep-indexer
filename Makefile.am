@@ -1,4 +1,4 @@
-SUBDIRS = src
+SUBDIRS = lzma/C src
 
 man1_MANS = man/ugrep-indexer.1
 
