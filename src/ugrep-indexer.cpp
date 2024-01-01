@@ -34,7 +34,7 @@
 @copyright (c) BSD-3 License - see LICENSE.txt
 */
 
-#define UGREP_INDEXER_VERSION "0.9.4 beta"
+#define UGREP_INDEXER_VERSION "0.9.5 beta"
 
 // use a task-parallel thread to decompress the stream into a pipe to search, also handles nested archives
 #define WITH_DECOMPRESSION_THREAD
@@ -400,7 +400,7 @@ struct Stream {
 
       is_compressed = zstream->decompressing();
 
-      // get zip info, if indexing a zip
+      // get zip/7z info, if indexing a zip/7z archive
       const zstreambuf::ZipInfo *zipinfo = zstream->zipinfo();
 
       // set archive flag when indexing an archive to get the next parts
@@ -592,6 +592,9 @@ void help()
 #else
             "\
             Supported compression formats: gzip (.gz), compress (.Z), zip"
+#ifndef WITH_NO_7ZIP
+            ", 7z"
+#endif
 #ifdef HAVE_LIBBZ2
             ",\n\
             bzip2 (requires suffix .bz, .bz2, .bzip2, .tbz, .tbz2, .tb2, .tz2)"
@@ -623,11 +626,11 @@ void help()
             When used with option -z (--decompress), indexes the contents of\n\
             compressed files and archives stored within archives by up to NUM\n\
             expansion levels deep.  The default --zmax=1 only permits indexing\n\
-            uncompressed files stored in cpio, pax, tar and zip archives;\n\
+            uncompressed files stored in cpio, pax, tar, zip and 7z archives;\n\
             compressed files and archives are detected as binary files and are\n\
             effectively ignored.  Specify --zmax=2 to index compressed files\n\
-            and archives stored in cpio, pax, tar and zip archives.  NUM may\n\
-            range from 1 to 99 for up to 99 decompression and de-archiving\n\
+            and archives stored in cpio, pax, tar, zip and 7z archives.  NUM\n\
+            may range from 1 to 99 for up to 99 decompression and de-archiving\n\
             steps.  Increasing NUM values gradually degrades performance.\n"
 #ifndef WITH_DECOMPRESSION_THREAD
             "\

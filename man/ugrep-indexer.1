@@ -1,4 +1,4 @@
-.TH UGREP-INDEXER "1" "December 07, 2023" "ugrep-indexer 0.9.3" "User Commands"
+.TH UGREP-INDEXER "1" "December 31, 2023" "ugrep-indexer 0.9.5" "User Commands"
 .SH NAME
 \fBugrep-indexer\fR -- file indexer to accelerate recursive searching
 .SH SYNOPSIS
@@ -81,7 +81,7 @@ This option may be repeated to specify additional files.
 Index the contents of compressed files and archives.  When used
 with option \fB\-\-zmax\fR=\fINUM\fR, indexes the contents of compressed files
 and archives stored within archives up to NUM levels deep.
-Supported compression formats: gzip (.gz), compress (.Z), zip,
+Supported compression formats: gzip (.gz), compress (.Z), zip, 7z,
 bzip2 (requires suffix .bz, .bz2, .bzip2, .tbz, .tbz2, .tb2, .tz2),
 lzma and xz (requires suffix .lzma, .tlz, .xz, .txz),
 lz4 (requires suffix .lz4),
@@ -92,11 +92,11 @@ brotli (requires suffix .br).
 When used with option \fB\-z\fR (\fB\-\-decompress\fR), indexes the contents of
 compressed files and archives stored within archives by up to NUM
 expansion levels deep.  The default \fB\-\-zmax\fR=1 only permits indexing
-uncompressed files stored in cpio, pax, tar and zip archives;
+uncompressed files stored in cpio, pax, tar, zip and 7z archives;
 compressed files and archives are detected as binary files and are
 effectively ignored.  Specify \fB\-\-zmax\fR=2 to index compressed files
-and archives stored in cpio, pax, tar and zip archives.  NUM may
-range from 1 to 99 for up to 99 decompression and de\-archiving
+and archives stored in cpio, pax, tar, zip and 7z archives.  NUM
+may range from 1 to 99 for up to 99 decompression and de\-archiving
 steps.  Increasing NUM values gradually degrades performance.
 .SH "EXIT STATUS"
 The \fBugrep-indexer\fR utility exits with one of the following values:
