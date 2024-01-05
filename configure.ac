@@ -47,22 +47,6 @@ AX_CHECK_ZSTDLIB([], [echo "optional libzstd not found: install if you want ugre
 
 AX_CHECK_BROTLILIB([], [echo "optional brotli library not found: install if you want ugrep-indexer option -z to index .br files"])
 
-AC_ARG_ENABLE(7zip,
-  [AS_HELP_STRING([--disable-7zip],
-                  [to disable 7zip and no longer index .7z files])],
-  [with_no_7zip="yes"],
-  [with_no_7zip="no"])
-AC_MSG_CHECKING(for --disable-7zip)
-if test "x$with_no_7zip" = "xno"; then
-  AC_MSG_RESULT(no)
-  CPPFLAGS="$CPPFLAGS -I../lzma/C"
-  LDFLAGS="$LDFLAGS -L../lzma/C"
-  LIBS="-lviiz $LIBS"
-else
-  EXTRA_CFLAGS="-DWITH_NO_7ZIP ${EXTRA_CFLAGS}"
-  AC_MSG_RESULT(yes)
-fi
-
 AC_ARG_WITH(bzip3,
   [AS_HELP_STRING([--with-bzip3],
                   [to enable bzip3 library to decompress .bz3 files])],
@@ -73,6 +57,22 @@ if test "x$with_bzip3_library" != "x"; then
     unset with_bzip3
   fi
   AX_CHECK_BZIP3LIB([], [echo "optional libbzip3 not found: install if you want ugrep-indexer option -z to index .bz3 files"])
+fi
+
+AC_ARG_ENABLE(7zip,
+  [AS_HELP_STRING([--disable-7zip],
+                  [to disable 7zip and no longer index .7z files])],
+  [with_7zip="$enableval"],
+  [with_7zip="yes"])
+AC_MSG_CHECKING(for --disable-7zip)
+if test "x$with_7zip" = "xyes"; then
+  AC_MSG_RESULT(no)
+  CPPFLAGS="$CPPFLAGS -I../lzma/C"
+  LDFLAGS="$LDFLAGS -L../lzma/C"
+  LIBS="-lviiz $LIBS"
+else
+  EXTRA_CFLAGS="-DWITH_NO_7ZIP ${EXTRA_CFLAGS}"
+  AC_MSG_RESULT(yes)
 fi
 
 fi
