@@ -216,6 +216,7 @@ ECHO_N = @ECHO_N@
 ECHO_T = @ECHO_T@
 ETAGS = @ETAGS@
 EXEEXT = @EXEEXT@
+EXTRA_CFLAGS = @EXTRA_CFLAGS@
 HAVE_CXX11 = @HAVE_CXX11@
 INSTALL = @INSTALL@
 INSTALL_DATA = @INSTALL_DATA@
@@ -299,7 +300,7 @@ target_alias = @target_alias@
 top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
-ugrep_indexer_CPPFLAGS = -DPLATFORM=\"$(PLATFORM)\"
+ugrep_indexer_CPPFLAGS = $(EXTRA_CFLAGS) -DPLATFORM=\"$(PLATFORM)\"
 ugrep_indexer_SOURCES = ugrep-indexer.cpp glob.hpp glob.cpp input.h input.cpp utf8.h zopen.h zopen.c zstream.hpp
 ugrep_indexer_LDADD = $(PTHREAD_LIBS)
 all: all-am

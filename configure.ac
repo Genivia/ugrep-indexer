@@ -77,6 +77,7 @@ fi
 
 fi
 
+AC_SUBST(EXTRA_CFLAGS)
 AC_SUBST([PTHREAD_CFLAGS], [""])
 AC_SUBST([PTHREAD_LIBS], ["-lpthread"])
 

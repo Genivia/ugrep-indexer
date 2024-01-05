@@ -551,7 +551,7 @@ void help()
             storage overhead at the cost of a higher rate of false positive\n\
             pattern matches (more noise).  A high accuracy reduces the rate of\n\
             false positive regex pattern matches (less noise) at the cost of an\n\
-            increased indexing storage overhead.  An accuracy between 3 and 7\n\
+            increased indexing storage overhead.  An accuracy between 2 and 7\n\
             is recommended.  The default accuracy is 5.\n\
     -., --hidden\n\
             Index hidden files and directories.\n\
