@@ -21,14 +21,18 @@ It only searches those files that may match a specified regex pattern by using
 an index of the file.  This index allows for a quick check if there is a
 potential match, thus we avoid searching all files.
 
-Indexed-based search should be safe and never skip updated files that may now
-match.  If any files and directories are added or changed after indexing, then
-searching will always search these additions and changes made to the file
+Indexed-based search with ugrep is safe and never skips updated files that may
+now match.  If any files and directories are added or changed after indexing,
+then searching will always search these additions and changes made to the file
 system by comparing file and directory time stamps to the indexing time stamp.
 
-If many files were added or changed, then we might want to re-index to bring
-the indexing up to date.  Re-indexing is incremental, so it will not take as
-much time as the initial indexing process.
+Also the contents of archives and compressed files can be indexed to speed up
+recursive searching.  This eliminates searching them when none of their
+contents match the specified patterns.
+
+When many files are added or changed after indexing, then we might want to
+re-index to bring the indexes up to date.  Re-indexing is incremental, so it
+will not take as much time as the initial indexing process.
 
 A typical but small example of an index-based search, for example on the ugrep
 v3.12.6 repository placed on a separate drive:
@@ -230,23 +234,21 @@ Future enhancements
   this approach is that index-based search with `ugrep --index` is no longer
   safe: new and modified files that are not indexed yet will not be searched.*
 
-- Indexing tiny files might not be effective to speed up grepping.  This needs
-  further investigation.  The indexer could skip such tiny files for example.
-
 - Each N-gram Bloom filter has its own "bit tier" in the hash table to avoid
   hash conflicts.  For example 2-grams do not share any bits with 3-grams.
   This ensures that we never have any false positives with characters being
-  matched that are not part of the pattern.  However, the 1-gram (single
-  character) bit space is small (at most 256 bits).  Therefore, we waste some
-  bits when hash tables are larger.  A possible approach to reduce waste is to
-  combine 1-grams with 2-grams to share the same bit space.  This is easy to do
-  if we consider a 1-gram being equal to a 2-gram with the second character set
-  to `\0` (NUL).  We can lower the false positive rate with a second 2-gram
-  hash based on a different hash method.  Or we can expand the "bit tiers" from
-  8 to 9 to store 9-grams.  That will increase the indexing accuracy for longer
-  patterns (9 or longer) at no additional cost.  On the other hand, that change
-  may cause more false positives when characters are being matched that are not
-  part of the pattern; we lose the advantage of a perfect 1-gram accuracy.
+  falsely matched that are actually not part of the pattern.  However, the
+  1-gram (single character) bit space is small (at most 256 bits).  Therefore,
+  we waste some bits when hash tables are larger.  A possible approach to
+  reduce waste is to combine 1-grams with 2-grams to share the same bit space.
+  This is easy to do if we consider a 1-gram being equal to a 2-gram with the
+  second character set to `\0` (NUL).  We can lower the false positive rate
+  with a second 2-gram hash based on a different hash method.  Or we can expand
+  the "bit tiers" from 8 to 9 to store 9-grams.  That will increase the
+  indexing accuracy for longer patterns (9 or longer) at no additional cost.
+  On the other hand, that change may cause more false positives when characters
+  are falsely matched that are not part of the pattern; we lose the advantage
+  of a perfect 1-gram accuracy.
 
 Q&A
 ---
