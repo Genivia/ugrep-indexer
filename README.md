@@ -21,14 +21,14 @@ It only searches those files that may match a specified regex pattern by using
 an index of the file.  This index allows for a quick check if there is a
 potential match, thus we avoid searching all files.
 
+Also the contents of archives and compressed files can be indexed to speed up
+recursive searching.  This eliminates searching them when none of their
+contents match the specified patterns.
+
 Indexed-based search with ugrep is safe and never skips updated files that may
 now match.  If any files and directories are added or changed after indexing,
 then searching will always search these additions and changes made to the file
 system by comparing file and directory time stamps to the indexing time stamp.
-
-Also the contents of archives and compressed files can be indexed to speed up
-recursive searching.  This eliminates searching them when none of their
-contents match the specified patterns.
 
 When many files are added or changed after indexing, then we might want to
 re-index to bring the indexes up to date.  Re-indexing is incremental, so it
