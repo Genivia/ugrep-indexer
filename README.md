@@ -11,7 +11,7 @@ This release is subject to change and improvements based on experiments and
 user feedback.  Regardless, this implementation has been extensively tested for
 correctness.*
 
-[ugrep](https://github.com/Genivia/ugrep) is a grep-compatible ultra fast file
+[ugrep](https://github.com/Genivia/ugrep) is a grep-compatible fast file
 searcher that supports index-based searching as of v3.12.5.
 
 Index-based search can be significantly faster on slow file systems and when
