@@ -287,24 +287,25 @@ as the target accuracy is not exceeded.  Halving is made possible by the fact
 that the table encodes hashes for 8 windows at offsets from the start of the
 pattern, corresponding to the 8 bits per index hashing table cell.  Combining
 the two halves of the table may flip some bits to zero from one, which may
-cause a false positive match.  This proves the monotonicity of the indexer.
+cause a false positive match.  This proves the monotonicity of the indexer.  A
+zero bit hash value indicates a possible match.
 
-The ugrep-indexer understands "binary files", which can be ignored and not
-indexed with ugrep-indexer option `-I` (`--ignore-binary`).  This is useful
-when searching with ugrep option `-I` (`--ignore-binary`) to ignore binary
-files, which is a typical scenario.
+The ugrep-indexer detects "binary files", which can be ignored and not indexed
+with ugrep-indexer option `-I` (`--ignore-binary`).  This is useful when
+searching with ugrep option `-I` (`--ignore-binary`) to ignore binary files,
+which is a typical scenario.
 
-The ugrep-indexer also supports .gitignore files (and similar), specified with
-ugrep-indexer option `-X` (`--ignore-files`).  Ignored files and directories
-will not be indexed to save file system space.  This works well when searching
-for files with ugrep option `--ignore-files`.
+The ugrep-indexer obeys .gitignore file exclusions when specified with option
+`-X` (`--ignore-files`).  Ignored files and directories will not be indexed to
+save file system space.  This works well when searching for files with ugrep
+option `--ignore-files`.
 
 Indexing can be aborted, for example with CTRL-C, which will not result in a
 loss of search capability with ugrep, but will leave the directory structure
 only partially indexed.
 
 Option `-c` checks indexes for stale references and non-indexed files and
-directories.  Run ugrep-indexer again to incrementally update all indexes.
+directories.
 
 Indexes are deleted with ugrep-indexer option `-d`.
 
