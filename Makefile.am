@@ -1,4 +1,8 @@
-SUBDIRS = lzma/C src
+SUBDIRS =
+if ENABLE_7ZIP
+SUBDIRS += lzma/C
+endif
+SUBDIRS += src
 
 man1_MANS = man/ugrep-indexer.1
 

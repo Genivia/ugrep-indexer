@@ -34,7 +34,7 @@
 @copyright (c) BSD-3 License - see LICENSE.txt
 */
 
-#define UGREP_INDEXER_VERSION "0.9.5 beta"
+#define UGREP_INDEXER_VERSION "0.9.6"
 
 // use a task-parallel thread to decompress the stream into a pipe to search, also handles nested archives
 #define WITH_DECOMPRESSION_THREAD
@@ -350,6 +350,10 @@ struct Stream {
 
   void close()
   {
+    // close input separately when not associated with the file
+    if (input.file() != file && input.file() != NULL)
+      fclose(input.file());
+    // close the file
     if (file != NULL)
       fclose(file);
     file = NULL;
@@ -367,6 +371,14 @@ struct Stream {
 
     if (flag_decompress)
     {
+      // close the underlying pipe previously created with pipe() and fdopen()
+      if (input.file() != NULL)
+      {
+        // close and unassign input
+        fclose(input.file());
+        input.clear();
+      }
+
       partname.clear();
 
       // start decompression thread if not running, get pipe with decompressed input
@@ -378,7 +390,7 @@ struct Stream {
       }
 
       // read archive/compressed/plain data from the decompression thread chain pipe
-      input = reflex::Input(pipe_in);
+      input = pipe_in;
     }
     else
     {
@@ -434,10 +446,10 @@ struct Stream {
     // -z: open next archived file if any or close the compressed file/archive
     if (flag_decompress)
     {
-      // close the input FILE* and its underlying pipe previously created with pipe() and fdopen()
+      // close the pipe previously created with pipe() and fdopen()
       if (input.file() != NULL)
       {
-        // close and unassign input, i.e. input.file() == NULL, also closes pipe_fd[0] per fdopen()
+        // close and unassign input
         fclose(input.file());
         input.clear();
       }
@@ -449,7 +461,7 @@ struct Stream {
       if (pipe_in != NULL)
       {
         // assign the next extracted file as input to search
-        input = reflex::Input(pipe_in);
+        input = pipe_in;
 
         // start searching the next file in the archive
         return true;

@@ -76,6 +76,7 @@ else
 fi
 
 fi
+AM_CONDITIONAL([ENABLE_7ZIP],[test "x$with_7zip" = "xyes"])
 
 AC_SUBST(EXTRA_CFLAGS)
 AC_SUBST([PTHREAD_CFLAGS], [""])

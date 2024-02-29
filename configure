@@ -653,6 +653,8 @@ LIBOBJS
 PTHREAD_LIBS
 PTHREAD_CFLAGS
 EXTRA_CFLAGS
+ENABLE_7ZIP_FALSE
+ENABLE_7ZIP_TRUE
 PLATFORM
 host_os
 host_vendor
@@ -7808,6 +7810,14 @@ printf "%s\n" "yes" >&6; }
 fi
 
 fi
+ if test "x$with_7zip" = "xyes"; then
+  ENABLE_7ZIP_TRUE=
+  ENABLE_7ZIP_FALSE='#'
+else
+  ENABLE_7ZIP_TRUE='#'
+  ENABLE_7ZIP_FALSE=
+fi
+
 
 
 PTHREAD_CFLAGS=""
@@ -7957,6 +7967,10 @@ Usually this means the macro was only invoked conditionally." "$LINENO" 5
 fi
 if test -z "${am__fastdepCC_TRUE}" && test -z "${am__fastdepCC_FALSE}"; then
   as_fn_error $? "conditional \"am__fastdepCC\" was never defined.
+Usually this means the macro was only invoked conditionally." "$LINENO" 5
+fi
+if test -z "${ENABLE_7ZIP_TRUE}" && test -z "${ENABLE_7ZIP_FALSE}"; then
+  as_fn_error $? "conditional \"ENABLE_7ZIP\" was never defined.
 Usually this means the macro was only invoked conditionally." "$LINENO" 5
 fi
 

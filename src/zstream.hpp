@@ -44,6 +44,7 @@
 #include <ctime>
 #include <climits>
 #include <exception>
+#include <stdexcept>
 #include <streambuf>
 #include <zlib.h>
 
@@ -538,8 +539,8 @@ class zstreambuf : public std::streambuf {
     // read and decompress zip file data into buf[0..len-1], return number of bytes decompressed, 0 for EOF or -1 for error
     std::streamsize decompress(unsigned char *buf, size_t len)
     {
-      // if no more data to decompress, then return 0 to indicate EOF
-      if (zend_)
+      // if header() was not called or no more data to decompress, then return 0 to indicate EOF
+      if (znew_ || zend_)
         return 0;
 
       std::streamsize num = 0;
@@ -1362,8 +1363,8 @@ class zstreambuf : public std::streambuf {
 
       catch (const std::invalid_argument&)
       {
-        /* non-seekable 7zip files cannot be decompressed,  */
-        cannot_decompress("non-seekable 7zip archive", pathname);
+        /* non-seekable and password-protected 7zip files cannot be decompressed */
+        cannot_decompress("7zip archive: encrypted data or 7z input is not seekable", pathname);
         file_ = NULL;
       }
 
