@@ -6,24 +6,18 @@ A monotonic indexer to speed up grepping
 The *ugrep-indexer* utility recursively indexes files to speed up recursive
 grepping.
 
-*Note: this is a 0.9 beta version of a new generation of "monotonic indexers".
-This release is subject to change and improvements based on experiments and
-user feedback.  Regardless, this implementation has been extensively tested for
-correctness.*
+Also the contents of archives and compressed files are indexed when specified
+with a command-line option.  This eliminates searching them when none of their
+contents match the specified patterns.
 
 [ugrep](https://github.com/Genivia/ugrep) is a grep-compatible fast file
-searcher that supports index-based searching as of v3.12.5.
-
-Index-based search can be significantly faster on slow file systems and when
-file system caching is ineffective: if the file system on a drive searched is
-not cached in RAM, i.e. it is "cold", then indexing will speed up search.
-It only searches those files that may match a specified regex pattern by using
-an index of the file.  This index allows for a quick check if there is a
-potential match, thus we avoid searching all files.
-
-Also the contents of archives and compressed files can be indexed to speed up
-recursive searching.  This eliminates searching them when none of their
-contents match the specified patterns.
+searcher that supports index-based searching.  Index-based search can be
+significantly faster on slow file systems and when file system caching is
+ineffective: if the file system on a drive searched is not cached in RAM, i.e.
+it is "cold", then indexing will speed up search.  It only searches those files
+that may match a specified regex pattern by using an index of the file.  This
+index allows for a quick check if there is a potential match, thus we avoid
+searching all files.
 
 Indexed-based search with ugrep is safe and never skips updated files that may
 now match.  If any files and directories are added or changed after indexing,
