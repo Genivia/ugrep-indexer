@@ -17,34 +17,92 @@ cat >> man/ugrep-indexer.1 << 'END'
 .SH NAME
 \fBugrep-indexer\fR -- file indexer to accelerate recursive searching
 .SH SYNOPSIS
-.B ugrep-indexer [\fIPATH\fR] [\fB-0\fR...\fB9\fR] [\fB-c\fR|\fB-d\fR|\fB-f\fR] [\fB-I\fR] [\fB-q\fR] [\fB-S\fR] [\fB-s\fR] [\fB-X\fR] [\fB-z\fR]
+.B ugrep-indexer [\fB-0\fR...\fB9\fR] [\fB-c\fR|\fB-d\fR|\fB-f\fR] [\fB-I\fR] [\fB-q\fR] [\fB-S\fR] [\fB-s\fR] [\fB-X\fR] [\fB-z\fR] [\fIPATH\fR]
 .SH DESCRIPTION
-The \fBugrep-indexer\fR utility recursively indexes files to accelerate ugrep
-recursive searches with \fBugrep\fR option \fB--index\fR.
+The \fBugrep-indexer\fR utility recursively indexes files to accelerate
+recursive searching with the \fBug --index\fR \fIPATTERN\fR commands:
+.IP
+$ \fBugrep-indexer\fR [\fB-I\fR] [\fB-z\fR]
+.IP
+  ...
+.IP
+$ \fBug\fR \fB--index\fR [\fB-I\fR] [\fB-z\fR] [\fB-r\fR|\fB-R\fR] \fIOPTIONS\fR \fIPATTERN\fR
+.IP
+$ \fBugrep\fR \fB--index\fR [\fB-I\fR] [\fB-z\fR] [\fB-r\fR|\fB-R\fR] \fIOPTIONS\fR \fIPATTERN\fR
 .PP
-An optional \fIPATH\fR may be specified to the root of the directory tree to
-index.  The default is to recursively index the working directory tree.
+where option \fB-I\fR or \fB--ignore-binary\fR ignores binary files, which is
+recommended to limit indexing storage overhead and to reduce search time.
+Option \fB-z\fR or \fB--decompress\fR indexes and searches archives and
+compressed files.
 .PP
-Indexes are incrementally updated unless option \fB-f\fR or \fB--force\fR is
-specified.
+Indexing speeds up searching file systems that are large and cold (not recently
+cached in RAM) and file systems that are generally slow to search.  Note that
+indexing may not speed up searching few files or recursively searching fast
+file systems.
 .PP
-When option \fB-I\fR or \fB--ignore-binary\fR is specified, binary files are
-ignored and not indexed.  Searching with `ugrep --index' still searches binary
-files unless ugrep option \fB-I\fR or \fB--ignore-binary\fR is specified also.
+Searching with \fBug --index\fR is safe and never skips modified files that may
+match after indexing; the \fBug --index\fR \fIPATTERN\fR command always
+searches files and directories that were added or modified after indexing.
+When option \fB--stats\fR is used with \fBug --index\fR, a search report is
+produced showing the number of files skipped not matching any indexes and the
+number of files and directories that were added or modified after indexing.
+Note that searching with \fBug --index\fR may significantly increase the
+start-up time when complex regex patterns are specified that contain large
+Unicode character classes combined with `*' or `+' repeats, which should be
+avoided.
 .PP
-Archives and compressed files are incrementally indexed only when option
-\fB-z\fR or \fB--decompress\fR is specified.  Otherwise, archives and
-compressed files are indexed as binary files, or are ignored with option
-\fB-I\fR or \fB--ignore-binary\fR.
+\fBugrep-indexer\fR stores a hidden index file in each directory indexed.  The
+size of an index file depends on the number of files indexed and the specified
+indexing accuracy.  Higher accuracy produces larger index files to improve
+search performance by reducing false positives (a false positive is a match
+prediction for a file when the file does not match the regex pattern.)
 .PP
-To create an indexing log file, specify option \fB-v\fR or \fB--verbose\fR and
-redirect standard output to a log file.  All messages are sent to standard
-output.
+\fBugrep-indexer\fR accepts an optional \fIPATH\fR to the root of the directory
+tree to index.  The default is to index the working directory tree.
+.PP
+\fBugrep-indexer\fR incrementally updates indexes.  To force reindexing,
+specify option \fB-f\fR or \fB--force\fR.  Indexes are deleted with option
+\fB-d\fR or \fB--delete\fR.
+.PP
+\fBugrep-indexer\fR may be stopped and restarted to continue indexing at any
+time.  Incomplete index files do not cause errors.
+.PP
+ASCII, UTF-8, UTF-16 and UTF-32 files are indexed and searched as text files
+unless their UTF encoding is invalid.  Files with other encodings are indexed
+as binary files and can be searched with non-Unicode regex patterns using
+\fBug --index \fB-U\fR.
+.PP
+When \fBugrep-indexer\fR option \fB-I\fR or \fB--ignore-binary\fR is specified,
+binary files are ignored and not indexed.  Avoid searching these non-indexed
+binary files with \fBug --index -I\fR using option \fB-I\fR.
+.PP
+\fBugrep-indexer\fR option \fB-X\fR or \fB--ignore-files\fR respects gitignore
+rules.  Likewise, avoid searching non-indexed ignored files with \fBug --index
+--ignore-files\fR using option \fB--ignore-files\fR.
+.PP
+Archives and compressed files are indexed with \fBugrep-indexer\fR option
+\fB-z\fR or \fB--decompress\fR.  Otherwise, archives and compressed files are
+indexed as binary files or are ignored with option \fB-I\fR or
+\fB--ignore-binary\fR.  Note that once an archive or compressed file is indexed
+as a binary file, it will not be reindexed with option \fB-z\fR to index the
+contents of the archive or compressed file.  Only files that are modified after
+indexing are reindexed, which is determined by comparing time stamps.
+.PP
+Symlinked files are indexed with \fBugrep-indexer\fR option \fB-S\fR or
+\fB--dereference-files\fR.  Symlinks to directories are never followed.  
+.PP
+To save a log file of the indexing process, specify option \fB-v\fR or
+\fB--verbose\fR and redirect standard output to a log file.  All messages and
+warnings are sent to standard output and captured by the log file.
+.PP
+A .ugrep-indexer configuration file with configuration options is loaded when
+present in the working directory or in the home directory.  A configuration
+option consists of the name of a long option and its argument when applicable.
 .PP
 The following options are available:
 END
 src/ugrep-indexer --help \
-| tail -n+24 \
+| tail -n+28 \
 | sed -e 's/\([^\\]\)\\/\1\\\\/g' \
 | sed \
   -e '/^$/ d' \
@@ -96,12 +154,12 @@ index files and directories matching the globs in .gitignore:
 $ ugrep-indexer -f -z -I -v -S -X
 .PP
 Same, but decrease index file storage to a minimum by decreasing indexing
-accuracy from 5 (default) to 0:
+accuracy from 4 (the default) to 0:
 .IP
 $ ugrep-indexer -f -0 -z -I -v -S -X
 .PP
-Increase search performance by increasing the indexing accuracy from 5
-(default) to 7 at a cost of larger index files:
+Increase search performance by increasing the indexing accuracy from 4
+(the default) to 7 at a cost of larger index files:
 .IP
 $ ugrep-indexer -f7zIvSX
 .PP
@@ -109,16 +167,16 @@ Recursively delete all hidden ._UG#_Store index files to restore the directory
 tree to non-indexed:
 .IP
 $ ugrep-indexer -d
+.SH COPYRIGHT
+Copyright (c) 2021-2024 Robert A. van Engelen <engelen@acm.org>
+.PP
+\fBugrep-indexer\fR is released under the BSD\-3 license.  All parts of the
+software have reasonable copyright terms permitting free redistribution.  This
+includes the ability to reuse all or parts of the ugrep source tree.
 .SH BUGS
 Report bugs at:
 .IP
 https://github.com/Genivia/ugrep-indexer/issues
-.PP
-.SH LICENSE
-\fBugrep\fR and \fBugrep-indexer\fR are released under the BSD\-3 license.  All
-parts of the software have reasonable copyright terms permitting free
-redistribution.  This includes the ability to reuse all or parts of the ugrep
-and ugrep-indexer source tree.
 END
 
 man man/ugrep-indexer.1 | sed 's/.//g' > man.txt

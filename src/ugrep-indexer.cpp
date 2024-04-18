@@ -34,10 +34,14 @@
 @copyright (c) BSD-3 License - see LICENSE.txt
 */
 
-#define UGREP_INDEXER_VERSION "0.9.6"
+// DO NOT ALTER THIS LINE: updated by makemake.sh and we need it physically here for MSVC++ build from source
+#define UGREP_VERSION "1.0.0"
 
 // use a task-parallel thread to decompress the stream into a pipe to search, also handles nested archives
 #define WITH_DECOMPRESSION_THREAD
+
+// ignore hidden files and directories in archives, but ugrep will never find them!
+// #define WITH_SKIP_HIDDEN_ARCHIVES
 
 // check if we are compiling for a windows OS, but not Cygwin or MinGW
 #if (defined(__WIN32__) || defined(_WIN32) || defined(WIN32) || defined(__BORLANDC__)) && !defined(__CYGWIN__) && !defined(__MINGW32__) && !defined(__MINGW64__)
@@ -162,6 +166,10 @@ inline uint64_t file_size(const WIN32_FIND_DATAW& ffd)
 # include "config.h"
 #endif
 
+#if defined(HAVE_F_RDAHEAD)
+# include <fcntl.h>
+#endif
+
 #define PATHSEPCHR '/'
 #define PATHSEPSTR "/"
 
@@ -208,6 +216,21 @@ inline uint64_t file_size(const struct stat& buf)
 
 #endif
 
+// platform -- see configure.ac
+#if !defined(PLATFORM)
+# if defined(OS_WIN)
+#  if defined(_WIN64)
+#   define PLATFORM "WIN64"
+#  elif defined(_WIN32)
+#   define PLATFORM "WIN32"
+#  else
+#   define PLATFORM "WIN"
+#  endif
+# else
+#  define PLATFORM ""
+# endif
+#endif
+
 // use zlib, libbz2, liblzma for option -z
 #ifdef HAVE_LIBZ
 # include "zstream.hpp"
@@ -216,8 +239,9 @@ inline uint64_t file_size(const struct stat& buf)
 #endif
 #endif
 
-#include "input.h"
+#include "reflex/input.h"
 #include "glob.hpp"
+#include <cctype>
 #include <cinttypes>
 #include <iostream>
 #include <algorithm>
@@ -237,6 +261,13 @@ inline uint64_t file_size(const struct stat& buf)
 // default --ignore-files=FILE argument
 #define DEFAULT_IGNORE_FILE ".gitignore"
 
+// convert accuracy 0 to 9 to noise level 10% to 80% rounded up
+inline unsigned noise_percentage(int accuracy)
+{
+  float percentage = 10.0 + 70.0 * (9 - accuracy) / 9.0;
+  return 100 - static_cast<unsigned>(100.0 - percentage);
+}
+
 typedef std::vector<std::string> StrVec;
 
 // fixed constant strings
@@ -247,7 +278,7 @@ const char ugrep_index_file_magic[5] = "UG#\x03";
 const char *arg_pathname = NULL;
 
 // command-line options
-int    flag_accuracy          = 5;     // -0 ... -9 (--accuracy) default is -5
+int    flag_accuracy          = 4;     // -0 ... -9 (--accuracy) default is -4
 bool   flag_check             = false; // -c (--check)
 bool   flag_decompress        = false; // -z (--decompress)
 bool   flag_delete            = false; // -d (--delete)
@@ -257,9 +288,13 @@ bool   flag_hidden            = false; // -. (--hidden)
 bool   flag_ignore_binary     = false; // -I (--ignore-binary)
 bool   flag_no_messages       = false; // -s (--no-messages)
 bool   flag_quiet             = false; // -q (--quiet)
+bool   flag_usage_warnings    = false; // internal flag
 bool   flag_verbose           = false; // -v (--verbose)
 size_t flag_zmax              = 1;     // --zmax
 StrVec flag_ignore_files;              // -X (--ignore-files)
+
+// count warnings
+size_t warnings = 0;
 
 // ignore (exclude) files/dirs globs, a glob prefixed with ! means override to include
 struct Ignore {
@@ -531,9 +566,10 @@ struct Stream {
 // display the version info and exit
 void version()
 {
-  std::cout << "ugrep-indexer " UGREP_INDEXER_VERSION "\n"
-    "License: BSD-3-Clause; ugrep user manual:  https://ugrep.com\n"
-    "Written by Robert van Engelen and others:  https://github.com/Genivia/ugrep\n" << std::endl;
+  std::cout << "ugrep-indexer " UGREP_VERSION " " PLATFORM "\n"
+    "License: BSD-3-Clause; ugrep user manual: <https://ugrep.com>\n"
+    "Written by Robert van Engelen and others: <https://github.com/Genivia/ugrep>\n"
+    "Ugrep utilizes the RE/flex regex library: <https://github.com/Genivia/RE-flex>" << std::endl;
   exit(EXIT_SUCCESS);
 }
 
@@ -547,12 +583,17 @@ void help()
     and not indexed.  Searching with ugrep --index still searches binary files\n\
     unless ugrep option -I or --ignore-binary is specified also.\n\
     \n\
-    Archives and compressed files are incrementally indexed only when option -z\n\
-    or --decompress is specified.  Otherwise, archives and compressed files are\n\
-    indexed as binary files, or are ignored with option -I or --ignore-binary.\n\
+    Archives and compressed files are indexed when option -z or --decompress is\n\
+    specified.  Otherwise, archives and compressed files are indexed as binary\n\
+    files, or are ignored with option -I or --ignore-binary.\n\
     \n\
-    To create an indexing log file, specify option -v or --verbose and redirect\n\
-    standard output to a log file.  All messages are sent to standard output.\n\
+    To save a log file, specify option -v or --verbose and redirect standard\n\
+    output to a log file.  All messages are sent to standard output.\n\
+    \n\
+    A .ugrep-indexer configuration file with configuration options is loaded\n\
+    when present in the working directory or in the home directory.  A\n\
+    configuration option consists of the name of a long option and its argument\n\
+    when applicable.\n\
     \n\
     The following options are available:\n\
     \n\
@@ -564,7 +605,7 @@ void help()
             pattern matches (more noise).  A high accuracy reduces the rate of\n\
             false positive regex pattern matches (less noise) at the cost of an\n\
             increased indexing storage overhead.  An accuracy between 2 and 7\n\
-            is recommended.  The default accuracy is 5.\n\
+            is recommended.  The default accuracy is 4.\n\
     -., --hidden\n\
             Index hidden files and directories.\n\
     -?, --help\n\
@@ -588,10 +629,11 @@ void help()
     -V, --version\n\
             Display version and exit.\n\
     -v, --verbose\n\
-            Produce verbose output.  Indexed files are indicated with an A for\n\
-            archive, C for compressed, B for binary or I for ignored binary.\n\
+            Produce verbose output.  Files are marked A for archive, C for\n\
+            compressed, and B for binary or I for ignored binary.  Deletions\n\
+            are marked D.\n\
     -X, --ignore-files[=FILE]\n\
-            Do not index files and directories matching the globs in a FILE\n\
+            Do not index files and directories matching the globs in FILE\n\
             encountered during indexing.  The default FILE is `" DEFAULT_IGNORE_FILE "'.\n\
             This option may be repeated to specify additional files.\n\
     -z, --decompress\n\
@@ -660,22 +702,32 @@ void help()
 // display usage information and exit
 void usage(const char *message, const char *arg = NULL)
 {
-  std::cerr << "ugrep-indexer: " << message << (arg != NULL ? arg : "") << '\n';
-  help();
+  if (!flag_usage_warnings)
+  {
+    std::cerr << "ugrep-indexer: " << message << (arg != NULL ? arg : "") << '\n';
+    help();
+  }
+  else
+  {
+    ++warnings;
+    std::cerr << "ugrep-indexer: .ugrep-indexer configuration file: " << message << (arg != NULL ? arg : "") << '\n';
+  }
 }
 
 // display a warning message unless option -s (--no-messages)
 void warning(const char *message, const char *arg = NULL)
 {
+  ++warnings;
   if (flag_no_messages)
     return;
-  fflush(stdout);
   printf("ugrep-indexer: warning: %s%s%s\n", message, arg != NULL ? " " : "", arg != NULL ? arg : "");
+  fflush(stdout);
 }
 
 // display an error message unless option -s (--no-messages)
 void error(const char *message, const char *arg)
 {
+  ++warnings;
   if (flag_no_messages)
     return;
   // use safe strerror_s() instead of strerror() when available
@@ -685,18 +737,19 @@ void error(const char *message, const char *arg)
 #else
   const char *errmsg = strerror(errno);
 #endif
-  fflush(stdout);
   printf("ugrep-indexer: error: %s%s%s: %s\n", message, arg != NULL ? " " : "", arg != NULL ? arg : "", errmsg);
+  fflush(stdout);
 }
 
 #ifdef HAVE_LIBZ
 // decompression error, function used by 
 void cannot_decompress(const char *pathname, const char *message)
 {
+  ++warnings;
   if (!flag_verbose || flag_no_messages)
     return;
-  fflush(stdout);
   printf("ugrep-indexer: warning: cannot decompress %s: %s\n", pathname, message != NULL ? message : "");
+  fflush(stdout);
 }
 #endif
 
@@ -717,172 +770,6 @@ size_t strtopos(const char *string, const char *message)
   if (size == 0)
     usage(message, string);
   return size;
-}
-
-// parse the command-line options
-void options(int argc, const char **argv)
-{
-  bool options = true;
-
-  for (int i = 1; i < argc; ++i)
-  {
-    const char *arg = argv[i];
-
-    if ((*arg == '-'
-#ifdef OS_WIN
-         || *arg == '/'
-#endif
-        ) && arg[1] != '\0' && options)
-    {
-      bool is_grouped = true;
-
-      // parse a ugrep command-line option
-      while (is_grouped && *++arg != '\0')
-      {
-        switch (*arg)
-        {
-          case '-':
-            is_grouped = false;
-            if (*++arg == '\0')
-            {
-              options = false;
-              continue;
-            }
-
-            if (strncmp(arg, "accuracy=", 9) == 0 && isdigit(arg[9]))
-              flag_accuracy = arg[9] - '0';
-            else if (strcmp(arg, "check") == 0)
-              flag_check = true;
-            else if (strcmp(arg, "decompress") == 0)
-              flag_decompress = true;
-            else if (strcmp(arg, "delete") == 0)
-              flag_delete = true;
-            else if (strcmp(arg, "dereference-files") == 0)
-              flag_dereference_files = true;
-            else if (strcmp(arg, "force") == 0)
-              flag_force = true;
-            else if (strcmp(arg, "help") == 0)
-              help();
-            else if (strcmp(arg, "hidden") == 0)
-              flag_hidden = true;
-            else if (strcmp(arg, "ignore-binary") == 0)
-              flag_ignore_binary = true;
-            else if (strcmp(arg, "ignore-files") == 0)
-              flag_ignore_files.emplace_back(DEFAULT_IGNORE_FILE);
-            else if (strncmp(arg, "ignore-files=", 13) == 0)
-              flag_ignore_files.emplace_back(arg + 13);
-            else if (strcmp(arg, "no-messages") == 0)
-              flag_no_messages = true;
-            else if (strcmp(arg, "quiet") == 0)
-              flag_quiet = flag_no_messages = true;
-            else if (strcmp(arg, "silent") == 0)
-              flag_quiet = flag_no_messages = true;
-            else if (strcmp(arg, "verbose") == 0)
-              flag_verbose = true;
-            else if (strcmp(arg, "version") == 0)
-              version();
-            else if (strncmp(arg, "zmax=", 5) == 0)
-              flag_zmax = strtopos(arg + 5, "invalid argument --zmax=");
-            else
-              usage("invalid option --", arg);
-
-            break;
-
-          case 'c':
-            flag_check = true;
-            break;
-
-          case 'd':
-            flag_delete = true;
-            break;
-
-          case 'f':
-            flag_force = true;
-            break;
-
-          case 'I':
-            flag_ignore_binary = true;
-            break;
-
-          case 'q':
-            flag_quiet = flag_no_messages = true;
-            break;
-
-          case 'S':
-            flag_dereference_files = true;
-            break;
-
-          case 's':
-            flag_no_messages = true;
-            break;
-
-          case 'V':
-            version();
-            break;
-
-          case 'v':
-            flag_verbose = true;
-            break;
-
-          case 'z':
-            flag_decompress = true;
-            break;
-
-          case '.':
-            flag_hidden = true;
-            break;
-
-          case 'X':
-            flag_ignore_files.emplace_back(DEFAULT_IGNORE_FILE);
-            break;
-
-          case '?':
-            help();
-            break;
-
-          default:
-            if (isdigit(*arg))
-              flag_accuracy = *arg - '0';
-            else
-              usage("invalid option -", arg);
-        }
-      }
-    }
-    else if (arg_pathname == NULL)
-    {
-      arg_pathname = arg;
-    }
-    else
-    {
-      usage("argument PATH already specified as ", arg_pathname);
-    }
-  }
-
-  // -q overrides -v
-  if (flag_quiet)
-    flag_verbose = false;
-
-  // -c silently overrides -d and -f
-  if (flag_check)
-    flag_delete = flag_force = false;
-
-  // -d silently overrides -f
-  if (flag_delete)
-    flag_force = false;
-
-#ifndef HAVE_LIBZ
-  if (flag_decompress)
-    usage("Option -z (--decompress) is not available");
-#endif
-
-#ifdef WITH_DECOMPRESSION_THREAD
-  // --zmax: NUM argument exceeds limit?
-  if (flag_zmax > 99)
-    usage("option --zmax argument exceeds upper limit");
-#else
-  if (flag_zmax > 1)
-    usage("Option --zmax is not available");
-#endif
 }
 
 // return true if s[0..n-1] contains a \0 (NUL) or a non-displayable invalid UTF-8 sequence
@@ -968,6 +855,19 @@ bool index(Stream& stream, const char *pathname, uint8_t *hashes, size_t& hashes
         return true;
       }
 #endif
+
+#ifdef WITH_SKIP_HIDDEN_ARCHIVES
+      if (!flag_hidden)
+      {
+        // ignore hidden files and directories in archives by skipping them (but ugrep will never find them!)
+        if (stream.partname.find("/.") != std::string::npos)
+        {
+          while (stream.input.get(buffer, BUF_SIZE) != 0)
+            continue;
+          return true;
+        }
+      }
+#endif
     }
     else if (archive)
     {
@@ -1007,6 +907,7 @@ bool index(Stream& stream, const char *pathname, uint8_t *hashes, size_t& hashes
     return true;
   }
 
+  const unsigned max_noise = noise_percentage(flag_accuracy);
   const uint8_t *window = reinterpret_cast<uint8_t*>(buffer);
   size_t winlen = std::min(buflen, WIN_SIZE);
   size = buflen;
@@ -1018,7 +919,7 @@ bool index(Stream& stream, const char *pathname, uint8_t *hashes, size_t& hashes
   {
     while (true)
     {
-      // compute 8 staggered Bloom filters, hashing 1-grams to 8-grams
+      // compute 8 staggered Bloom filters, hashing 1-grams to 8-grams for N^2 = 64 Bloom hash functions
       uint16_t h = window[0];
       hashes[h] &= ~0x01;
       h = indexhash(h, window[1]);
@@ -1082,7 +983,7 @@ bool index(Stream& stream, const char *pathname, uint8_t *hashes, size_t& hashes
 
   noise /= 8 * hashes_size;
 
-  // compress the table in place until max noise is reached or exceeded
+  // compress the table in place until the given accuracy max noise is reached or exceeded
   while (hashes_size > MIN_SIZE)
   {
     // compute noise of halved hashes table (zero bits are hits)
@@ -1103,8 +1004,8 @@ bool index(Stream& stream, const char *pathname, uint8_t *hashes, size_t& hashes
 
     half_noise /= 8 * half;
 
-    // stop at accuracy 0 -> 80% and 9 -> 10% default 5 -> 41.1% (4 -> 48.9%, 6 -> 33%)
-    if (100.0 * half_noise >= 10.0 + 70.0 * (9 - flag_accuracy) / 9.0)
+    // stop at desired accuracy
+    if (100.0 * half_noise >= max_noise)
       break;
 
     // compress hashes table
@@ -1119,7 +1020,7 @@ bool index(Stream& stream, const char *pathname, uint8_t *hashes, size_t& hashes
 }
 
 // trim white space from either end of the line
-void trim(std::string& line)
+inline void trim(std::string& line)
 {
   size_t len = line.length();
   size_t pos;
@@ -1509,7 +1410,7 @@ void deleter(const char *pathname)
       {
         ++num_removed;
         if (flag_verbose)
-          printf("%13" PRIu64 " %s\n", num_removed, index_filename.c_str());
+          printf("D%12" PRIu64 " %s\n", num_removed, index_filename.c_str());
       }
     }
   }
@@ -1521,6 +1422,20 @@ void deleter(const char *pathname)
 // recursively index files
 void indexer(const char *pathname)
 {
+  if (!flag_no_messages && !flag_check && !flag_quiet)
+  {
+    printf("\n> index accuracy: %d (%u%%~%u%% noise)", flag_accuracy, noise_percentage(flag_accuracy + 1), noise_percentage(flag_accuracy));
+    printf("\n> decompress:     %s", (flag_decompress ? "yes" : "no"));
+    if (flag_decompress)
+      printf(" (zmax=%zu)", flag_zmax);
+    printf("\n> ignore binary:  %s", (flag_ignore_binary ? "yes" : "no"));
+    if (flag_ignore_files.empty())
+      printf("\n> ignore files:   no");
+    for (const auto& ignore : flag_ignore_files)
+      printf("\n> ignore files:   \"%s\"", ignore.c_str());
+    printf("\n> index hidden:   %s\n\n", (flag_hidden ? "yes" : "no"));
+  }
+
   std::stack<Entry> dir_entries;
   std::vector<Entry> file_entries;
   std::string index_filename;
@@ -1592,7 +1507,8 @@ void indexer(const char *pathname)
 
             while (true)
             {
-              if (fseeko(index_file, inpos, SEEK_SET) != 0 || fread(header, sizeof(header), 1, index_file) == 0)
+              if (fseeko(index_file, inpos, SEEK_SET) != 0 ||
+                  fread(header, sizeof(header), 1, index_file) == 0)
                 break;
 
               // hashes table size, zero to skip empty files and binary files when -I is specified
@@ -1630,21 +1546,25 @@ void indexer(const char *pathname)
                   if (entry->basename_size() == basename_size && strncmp(entry->basename(), basename, basename_size) == 0)
                     break;
 
+              bool archive = (header[1] & 0x40) != 0;
+              bool binary = (header[1] & 0x80) != 0;
+
               // if file is present in the directory and not updated, then preserve entry in the index
               if (entry != file_entries.end() && entry->mtime <= index_time)
               {
                 ++num_files;
 
                 // binary files registered but not indexed
-                bool binary = (header[1] & 0x80) != 0;
                 bin_files += binary;
                 not_files += binary && hashes_size == 0;
 
                 if (inpos > outpos)
                 {
+                  if (fread(hashes, 1, hashes_size, index_file) < hashes_size)
+                    break;
+
                   // move header, basename, and hashes to the front of the index file (only happens when not just checking)
-                  if (fread(hashes, 1, hashes_size, index_file) < hashes_size ||
-                      fseeko(index_file, outpos, SEEK_SET) != 0 ||
+                  if (fseeko(index_file, outpos, SEEK_SET) != 0 ||
                       fwrite(header, sizeof(header), 1, index_file) == 0 ||
                       fwrite(basename, 1, basename_size, index_file) < basename_size ||
                       fwrite(hashes, 1, hashes_size, index_file) < hashes_size)
@@ -1655,7 +1575,6 @@ void indexer(const char *pathname)
                 }
 
                 // remove file entry from the cat file entries unless multi-part archive
-                bool archive = (header[1] & 0x40) != 0;
                 if (archive)
                 {
                   // postpone removing this archive entry
@@ -1680,15 +1599,19 @@ void indexer(const char *pathname)
                 else
                 {
                   if (flag_verbose)
-                    printf("-           -  -%% %s\n", basename);
+                    printf("D           -  -%% %s\n", basename);
 
                   sum_hashes_size -= sizeof(header) + basename_size + hashes_size;
                 }
               }
               else
               {
-                ++mod_files;
-                --add_files;
+                // modified indexed file, when not ignored binary
+                if (!binary || hashes_size != 0)
+                {
+                  ++mod_files;
+                  --add_files;
+                }
 
                 if (flag_check)
                 {
@@ -1764,27 +1687,27 @@ void indexer(const char *pathname)
         {
           do
           {
-            if (flag_verbose)
-            {
-              int classification = ' ';
-              if (compressed)
-                classification = 'C';
-              if (archive)
-                classification = 'A';
-              if (binary)
-                classification = size == 0 ? 'I' : 'B';
-              if (archive)
-                printf("%c%12" PRIu64 "%3u%% %s{%s}\n", classification, size, static_cast<unsigned>(100.0 * noise + 0.5), pathname, stream.partname.c_str());
-              else
-                printf("%c%12" PRIu64 "%3u%% %s\n", classification, size, static_cast<unsigned>(100.0 * noise + 0.5), pathname);
-            }
-
             // binary files registered but not indexed
             bin_files += binary;
-            not_files += binary && hashes_size == 0;
+            not_files += binary && size == 0;
 
             if (!archive || size > 0)
             {
+              if (flag_verbose)
+              {
+                int classification = ' ';
+                if (compressed)
+                  classification = 'C';
+                if (archive)
+                  classification = 'A';
+                if (binary)
+                  classification = size == 0 ? 'I' : 'B';
+                if (archive)
+                  printf("%c%12" PRIu64 "%3u%% %s{%s}\n", classification, size, static_cast<unsigned>(100.0 * noise + 0.5), pathname, stream.partname.c_str());
+                else
+                  printf("%c%12" PRIu64 "%3u%% %s\n", classification, size, static_cast<unsigned>(100.0 * noise + 0.5), pathname);
+              }
+
               // log2 of the hashes table size, zero to skip empty files and binary files when -I is specified
               uint8_t logsize = 0;
               for (size_t k = hashes_size; k > 1; k >>= 1)
@@ -1814,7 +1737,7 @@ void indexer(const char *pathname)
 
               zip_files += archive;
               ++num_files;
-              ++add_files;
+              add_files += !binary || hashes_size != 0;
               sum_files_size += size;
               sum_noise += noise;
               sum_hashes_size += sizeof(header) + basename_size + hashes_size;
@@ -1823,7 +1746,7 @@ void indexer(const char *pathname)
         }
         else
         {
-          printf("cannot index %s\n", pathname);
+          error("cannot index", pathname);
         }
       }
     }
@@ -1846,40 +1769,265 @@ void indexer(const char *pathname)
 
   if (flag_check)
   {
-    printf("\n%13" PRIu64 " files indexed in %" PRIu64 " directories\n%13" PRId64 " directories not indexed\n%13" PRId64 " new files not indexed\n%13" PRId64 " modified files not indexed\n%13" PRId64 " deleted files are needlessly indexed\n%13" PRId64 " binary files indexed\n%13" PRId64 " binary files ignored with --ignore-binary\n", num_files, num_dirs, add_dirs, add_files, mod_files, del_files - ign_files, bin_files - not_files, not_files);
+    if (!flag_quiet)
+    {
+      printf("\n%13" PRIu64 " files indexed in %" PRIu64 " directories\n%13" PRId64 " directories not indexed\n%13" PRId64 " new files not indexed\n%13" PRId64 " modified files not indexed\n%13" PRId64 " deleted files are needlessly indexed\n%13" PRId64 " binary files indexed\n%13" PRId64 " binary files ignored with --ignore-binary\n", num_files, num_dirs, add_dirs, add_files, mod_files, del_files - ign_files, bin_files - not_files, not_files);
+      if (!flag_ignore_files.empty())
+        printf("%13" PRIu64 " directories ignored with --ignore-files\n%13" PRIu64 " files ignored with --ignore-files\n", ign_dirs, ign_files);
+      printf("%13" PRIu64 " symbolic links skipped\n%13" PRIu64 " devices skipped\n", num_links, num_other);
+      if (warnings > 0)
+        printf("%13zu warnings\n", warnings);
+      if (add_dirs == 0 && add_files == 0 && mod_files == 0 && del_files == 0)
+        printf("\nChecked: indexes are fresh and up to date\n\n");
+      else
+        printf("\nWarning: some indexes appear to be stale and are outdated or missing\n\n");
+    }
+    // --check exits with 0 for up to date or 1 missing or outdated index files
+    exit((add_dirs == 0 && add_files == 0 && mod_files == 0 && del_files == 0) ? EXIT_SUCCESS : EXIT_FAILURE);
+  }
+  else if (!flag_quiet)
+  {
+    if (flag_decompress && zip_files > 0)
+      printf("\n%13" PRIu64 " files indexed in %" PRIu64 " directories\n%13" PRId64 " new directories indexed\n%13" PRId64 " new files indexed (%" PRIu64 " in archives)\n%13" PRId64 " modified files indexed\n%13" PRId64 " deleted files removed from indexes\n%13" PRId64 " binary files indexed\n%13" PRId64 " binary files ignored with --ignore-binary\n", num_files, num_dirs, add_dirs, add_files, zip_files, mod_files, del_files, bin_files - not_files, not_files);
+    else
+      printf("\n%13" PRIu64 " files indexed in %" PRIu64 " directories\n%13" PRId64 " new directories indexed\n%13" PRId64 " new files indexed\n%13" PRId64 " modified files indexed\n%13" PRId64 " deleted files removed from indexes\n%13" PRId64 " binary files indexed\n%13" PRId64 " binary files ignored with --ignore-binary\n", num_files, num_dirs, add_dirs, add_files, mod_files, del_files, bin_files - not_files, not_files);
     if (!flag_ignore_files.empty())
       printf("%13" PRIu64 " directories ignored with --ignore-files\n%13" PRIu64 " files ignored with --ignore-files\n", ign_dirs, ign_files);
-    printf("%13" PRIu64 " symbolic links skipped\n%13" PRIu64 " devices skipped\n\n", num_links, num_other);
+    printf("%13" PRIu64 " symbolic links skipped\n%13" PRIu64 " devices skipped\n", num_links, num_other);
+    if (!flag_quiet && warnings > 0)
+      printf("%13zu warnings\n", warnings);
+    if (sum_hashes_size > 0)
+      printf("%13" PRId64 " bytes indexing storage increase at %" PRId64 " bytes/file\n\n", sum_hashes_size, sum_hashes_size / num_files);
+    else
+      printf("%13" PRId64 " bytes indexing storage decrease\n\n", sum_hashes_size);
+    printf("Indexes are fresh and up to date\n\n");
+  }
+}
 
-    if (add_dirs == 0 && add_files == 0 && mod_files == 0 && del_files == 0)
+// parse the command-line options
+void options(int argc, const char **argv)
+{
+  bool options = true;
+
+  for (int i = 1; i < argc; ++i)
+  {
+    const char *arg = argv[i];
+
+    if ((*arg == '-'
+#ifdef OS_WIN
+         || *arg == '/'
+#endif
+        ) && arg[1] != '\0' && options)
     {
-      if (!flag_quiet)
-        printf("Checked: indexes are fresh and up to date\n\n");
-      exit(EXIT_SUCCESS);
+      bool is_grouped = true;
+
+      // parse a ugrep command-line option
+      while (is_grouped && *++arg != '\0')
+      {
+        switch (*arg)
+        {
+          case '-':
+            is_grouped = false;
+            if (*++arg == '\0')
+            {
+              options = false;
+              continue;
+            }
+
+            if (strncmp(arg, "accuracy=", 9) == 0 && isdigit(arg[9]))
+              flag_accuracy = arg[9] - '0';
+            else if (strcmp(arg, "check") == 0)
+              flag_check = true;
+            else if (strcmp(arg, "decompress") == 0)
+              flag_decompress = true;
+            else if (strcmp(arg, "delete") == 0)
+              flag_delete = true;
+            else if (strcmp(arg, "dereference-files") == 0)
+              flag_dereference_files = true;
+            else if (strcmp(arg, "force") == 0)
+              flag_force = true;
+            else if (strcmp(arg, "help") == 0)
+              help();
+            else if (strcmp(arg, "hidden") == 0)
+              flag_hidden = true;
+            else if (strcmp(arg, "ignore-binary") == 0)
+              flag_ignore_binary = true;
+            else if (strcmp(arg, "ignore-files") == 0)
+              flag_ignore_files.emplace_back(DEFAULT_IGNORE_FILE);
+            else if (strncmp(arg, "ignore-files=", 13) == 0)
+              flag_ignore_files.emplace_back(arg + 13);
+            else if (strcmp(arg, "no-messages") == 0)
+              flag_no_messages = true;
+            else if (strcmp(arg, "quiet") == 0)
+              flag_quiet = flag_no_messages = true;
+            else if (strcmp(arg, "silent") == 0)
+              flag_quiet = flag_no_messages = true;
+            else if (strcmp(arg, "verbose") == 0)
+              flag_verbose = true;
+            else if (strcmp(arg, "version") == 0)
+              version();
+            else if (strncmp(arg, "zmax=", 5) == 0)
+              flag_zmax = strtopos(arg + 5, "invalid argument --zmax=");
+            else
+              usage("invalid option --", arg);
+
+            break;
+
+          case 'c':
+            flag_check = true;
+            break;
+
+          case 'd':
+            flag_delete = true;
+            break;
+
+          case 'f':
+            flag_force = true;
+            break;
+
+          case 'I':
+            flag_ignore_binary = true;
+            break;
+
+          case 'q':
+            flag_quiet = flag_no_messages = true;
+            break;
+
+          case 'S':
+            flag_dereference_files = true;
+            break;
+
+          case 's':
+            flag_no_messages = true;
+            break;
+
+          case 'V':
+            version();
+            break;
+
+          case 'v':
+            flag_verbose = true;
+            break;
+
+          case 'z':
+            flag_decompress = true;
+            break;
+
+          case '.':
+            flag_hidden = true;
+            break;
+
+          case 'X':
+            flag_ignore_files.emplace_back(DEFAULT_IGNORE_FILE);
+            break;
+
+          case '?':
+            help();
+            break;
+
+          default:
+            if (isdigit(*arg))
+              flag_accuracy = *arg - '0';
+            else
+              usage("invalid option -", arg);
+        }
+      }
+    }
+    else if (arg_pathname == NULL)
+    {
+      arg_pathname = arg;
     }
     else
     {
-      if (!flag_quiet)
-        printf("Warning: some indexes appear to be stale and are outdated or missing\n\n");
-      exit(EXIT_FAILURE);
+      usage("argument PATH already specified as ", arg_pathname);
     }
   }
-  else
+
+  // -q overrides -v
+  if (flag_quiet)
+    flag_verbose = false;
+
+  // -c silently overrides -d and -f
+  if (flag_check)
+    flag_delete = flag_force = false;
+
+  // -d silently overrides -f
+  if (flag_delete)
+    flag_force = false;
+
+#ifndef HAVE_LIBZ
+  if (flag_decompress)
+    usage("Option -z (--decompress) is not available");
+#endif
+
+#ifdef WITH_DECOMPRESSION_THREAD
+  // --zmax: NUM argument exceeds limit?
+  if (flag_zmax > 99)
+    usage("option --zmax argument exceeds upper limit");
+#else
+  if (flag_zmax > 1)
+    usage("Option --zmax is not available");
+#endif
+}
+
+// load .ugrep-indexer config file when present in the working or home directory
+void load_config()
+{
+  // open a local config file or in the home directory
+  FILE *file = NULL;
+  if (fopenw_s(&file, ".ugrep-indexer", "r") != 0)
   {
-    if (!flag_quiet)
+#ifdef OS_WIN
+    const char *home_dir = getenv("USERPROFILE");
+#else
+    const char *home_dir = getenv("HOME");
+#endif
+    file = NULL;
+    if (home_dir != NULL)
     {
-      if (flag_decompress && zip_files > 0)
-        printf("\n%13" PRIu64 " files indexed in %" PRIu64 " directories\n%13" PRId64 " new directories indexed\n%13" PRId64 " new files indexed (%" PRIu64 " in archives)\n%13" PRId64 " modified files indexed\n%13" PRId64 " deleted files removed from indexes\n%13" PRId64 " binary files indexed\n%13" PRId64 " binary files ignored with --ignore-binary\n", num_files, num_dirs, add_dirs, add_files, zip_files, mod_files, del_files, bin_files - not_files, not_files);
-      else
-        printf("\n%13" PRIu64 " files indexed in %" PRIu64 " directories\n%13" PRId64 " new directories indexed\n%13" PRId64 " new files indexed\n%13" PRId64 " modified files indexed\n%13" PRId64 " deleted files removed from indexes\n%13" PRId64 " binary files indexed\n%13" PRId64 " binary files ignored with --ignore-binary\n", num_files, num_dirs, add_dirs, add_files, mod_files, del_files, bin_files - not_files, not_files);
-      if (!flag_ignore_files.empty())
-        printf("%13" PRIu64 " directories ignored with --ignore-files\n%13" PRIu64 " files ignored with --ignore-files\n", ign_dirs, ign_files);
-      if (sum_hashes_size > 0)
-        printf("%13" PRIu64 " symbolic links skipped\n%13" PRIu64 " devices skipped\n%13" PRId64 " bytes indexing storage increase at %" PRId64 " bytes/file\n\n", num_links, num_other, sum_hashes_size, sum_hashes_size / num_files);
-      else
-        printf("%13" PRIu64 " symbolic links skipped\n%13" PRIu64 " devices skipped\n%13" PRId64 " bytes indexing storage decrease\n\n", num_links, num_other, sum_hashes_size);
-      printf("Indexes are fresh and up to date\n\n");
+      // open a config file in the home directory
+      std::string config_file;
+      config_file.assign(home_dir).append(PATHSEPSTR).append(".ugrep-indexer");
+      if (fopenw_s(&file, config_file.c_str(), "r") != 0)
+        file = NULL;
     }
+  }
+
+  // parse config file when present
+  if (file != NULL)
+  {
+    reflex::BufferedInput input(file);
+    std::string line;
+
+    // warn about invalid options but do not exit
+    flag_usage_warnings = true;
+
+    while (true)
+    {
+      // read the next line
+      if (getline(input, line))
+        break;
+
+      trim(line);
+
+      // parse option or skip empty lines and comments
+      if (!line.empty() && line.front() != '#')
+      {
+        // construct an option argument to parse as argv[]
+        line.insert(0, "--");
+        const char *arg = line.c_str();
+        const char *args[2] = { NULL, arg };
+
+        options(2, args);
+      }
+    }
+
+    if (warnings > 0)
+      exit(EXIT_FAILURE);
+
+    flag_usage_warnings = false;
+
+    fclose(file);
   }
 }
 
@@ -1889,6 +2037,8 @@ int main(int argc, const char **argv)
   // ignore SIGPIPE, should never happen, but just in case
   signal(SIGPIPE, SIG_IGN);
 #endif
+
+  load_config();
 
   options(argc, argv);
 

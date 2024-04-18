@@ -1,5 +1,5 @@
-AC_INIT([ugrep-indexer],[0.9])
-AM_INIT_AUTOMAKE([foreign])
+AC_INIT([ugrep-indexer],[1.0.0],[https://github.com/Genivia/ugrep-indexer/issues],[ugrep],[https://ugrep.com])
+AM_INIT_AUTOMAKE([foreign subdir-objects dist-xz no-dist-gzip])
 AC_CONFIG_HEADERS([config.h])
 AC_COPYRIGHT([Copyright (C) 2023 Robert van Engelen, Genivia Inc.])
 
@@ -10,11 +10,13 @@ AC_CONFIG_MACRO_DIR([m4])
 : ${CFLAGS="-Wall -Wextra -Wunused -O2"}
 
 AC_LANG([C++])
-AX_CXX_COMPILE_STDCXX_11([ext], [mandatory])
+AX_CXX_COMPILE_STDCXX([11],[ext],[mandatory])
 
 AC_HEADER_DIRENT
 AC_STRUCT_DIRENT_D_INO
 AC_STRUCT_DIRENT_D_TYPE
+
+AX_PTHREAD
 
 AC_CHECK_MEMBERS([struct stat.st_atim, struct stat.st_mtim, struct stat.st_ctim])
 AC_CHECK_MEMBERS([struct stat.st_atimespec, struct stat.st_mtimespec, struct stat.st_ctimespec])
@@ -79,8 +81,6 @@ fi
 AM_CONDITIONAL([ENABLE_7ZIP],[test "x$with_7zip" = "xyes"])
 
 AC_SUBST(EXTRA_CFLAGS)
-AC_SUBST([PTHREAD_CFLAGS], [""])
-AC_SUBST([PTHREAD_LIBS], ["-lpthread"])
 
 AC_CONFIG_FILES([Makefile src/Makefile lzma/C/Makefile])
 

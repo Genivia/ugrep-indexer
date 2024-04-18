@@ -34,7 +34,7 @@
 @copyright (c) BSD-3 License - see LICENSE.txt
 */
 
-#include "input.h"
+#include "reflex/input.h"
 #include <stdio.h>
 #include <sys/stat.h>
 #include <sys/types.h>

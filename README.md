@@ -69,7 +69,7 @@ mounting again to clear FS cache to record the effect of indexing:
     src/ugrep.cpp
 
     Searched 1317 files in 28 directories in 0.0487 seconds with 8 threads: 1 matching (0.07593%)
-    Skipped 1316 of 1317 files with indexes not matching any search patterns
+    Skipped 1316 of 1317 files with non-matching indexes
 
 There is always some variance in the elapsed time with 0.0487 seconds the best
 time of four search runs that produced a search time range of 0.0487 (21x speed
@@ -107,7 +107,7 @@ Indexed search is still a lot faster by 12x than non-indexed for this example,
 with 16 files actually searched (15 false positives):
 
     Searched 1317 files in 28 directories in 0.0722 seconds with 8 threads: 1 matching (0.07593%)
-    Skipped 1301 of 1317 files with indexes not matching any search patterns
+    Skipped 1301 of 1317 files with non-matching indexes
 
 Regex patterns that are more complex than this example may have a higher false
 positive rate naturally, which is the rate of files that are considered
@@ -149,8 +149,8 @@ slightly longer search times:
 | `-8` |               0 |            unch |
 | `-9` |               0 |            unch |
 
-Accucacy `-5` is the default, which tends to work very well to search with
-regex patterns of modest complexity.
+Accuracy `-4` is the default (from `-5` previously in older releases), which
+tends to work very well to search with regex patterns of modest complexity.
 
 One word of caution.  There is always a tiny bit of overhead to check the
 indexes.  This means that if all files are already cached in RAM, because files
@@ -255,7 +255,7 @@ files.
 
 The size of the index files depends on the specified accuracy, with `-0` the
 lowest (small index files) and `-9` the highest (large index files).  The
-default accuracy is `-5`.  See the next Q for details on the impact of accuracy
+default accuracy is `-4`.  See the next Q for details on the impact of accuracy
 on indexing size versus search speed.
 
 Indexing *never follows symbolic links to directories*, because symbolically
